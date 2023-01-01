@@ -272,7 +272,7 @@ class GymTaskSampler(TaskSampler):
                 repeating = True
             else:
                 self._number_of_steps_taken_with_task_seed = 0
-                self._last_env_seed = self.np_seeded_random_gen.randint(0, 2 ** 31 - 1)
+                self._last_env_seed = self.np_seeded_random_gen.integers(0, 2 ** 31 - 1)
 
         task_has_same_seed_reset = hasattr(self.env, "same_seed_reset")
 

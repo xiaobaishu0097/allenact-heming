@@ -310,7 +310,7 @@ class MiniGridTask(Task[CrossingEnv]):
             >= self.closest_agent_has_been_to_goal
         ):
             return (
-                int(self.env.np_random.randint(0, len(self.class_action_names()))),
+                int(self.env.np_random.integers(0, len(self.class_action_names()))),
                 True,
             )
 
@@ -499,7 +499,7 @@ class MiniGridTaskSampler(TaskSampler):
                 repeating = True
             else:
                 self._number_of_steps_taken_with_task_seed = 0
-                self._last_env_seed = self.np_seeded_random_gen.randint(0, 2 ** 31 - 1)
+                self._last_env_seed = int(self.np_seeded_random_gen.integers(0, 2 ** 31 - 1))
 
         task_has_same_seed_reset = hasattr(self.env, "same_seed_reset")
 

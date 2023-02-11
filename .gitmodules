@@ -2,3 +2,6 @@
 	path = projects/ithor_rearrangement
 	url = https://github.com/allenai/ai2thor-rearrangement.git
 	branch = active_neural_slam
+[submodule "submodules/detr"]
+	path = submodules/detr
+	url = git@github.com:xiaobaishu0097/detr-heming.git

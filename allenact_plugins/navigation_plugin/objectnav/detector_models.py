@@ -131,7 +131,7 @@ class ResnetDETRTensorGoalEncoder(nn.Module):
                 nn.Conv2d(*self.combine_hid_out_dims[0:2], 1),
             )
             self.detr_compressor = nn.Sequential(
-                nn.Linear(264, self.resnet_hid_out_dims[0]),
+                nn.Linear(263, self.resnet_hid_out_dims[0]),
                 nn.ReLU(),
                 nn.Linear(self.resnet_hid_out_dims[0], self.resnet_hid_out_dims[0]),
                 nn.ReLU(),

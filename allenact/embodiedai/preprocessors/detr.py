@@ -37,7 +37,7 @@ class DETREmbedder(nn.Module):
         self.detector = self.detector.cuda()
 
         if detr_path is None:
-            detr_path = './storage/model_zoo/detr/robothor.13cls.debug.pth'
+            detr_path = './storage/model_zoo/detr/robothor.13cls.checkpoint0059.pth'
         detector_state_dict = torch.load(detr_path, map_location='cpu')
         self.detector.load_state_dict(detector_state_dict['model'])
 
@@ -71,7 +71,7 @@ class DETREmbedder(nn.Module):
         }
 
         # generate target indicator array based on detection results labels
-        detection_inputs['indicator'] = (detection_inputs['labels'] == target).float()
+        detection_inputs['indicator'] = (detection_inputs['labels'] == einops.repeat(target, 'b -> b n 1', n=100).expand_as(detection_inputs['labels'])).float()
 
         return detection_inputs
 

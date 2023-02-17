@@ -58,4 +58,4 @@ class ObjectNavRoboThorRGBPPOExperimentConfig(ObjectNavRoboThorBaseConfig):
 
     @classmethod
     def tag(cls):
-        return "ObjectNav-RoboTHOR-RGB-ResNet18DETRGRU-TASKSAMPLER-DDPPO"
+        return "ObjectNav-RoboTHOR-RGB-ResNet18DETRGRU-DDPPO"

@@ -224,6 +224,79 @@ class ObjectNavDAggerMixin:
         )
 
 
+class ObjectNavPreTrainPPOMixin:
+    @staticmethod
+    def training_pipeline(
+        auxiliary_uuids: Sequence[str],
+        multiple_beliefs: bool,
+        training_steps: int = 300000000,
+        lr: float = 3e-4,
+        num_mini_batch: int = 1,
+        update_repeats: int = 4,
+        num_steps: int = 128,
+        pretrain_steps: int = int(5e6),
+        save_interval: int = 5000000,
+        log_interval = 10000 if torch.cuda.is_available() else 1,
+        gamma: float = 0.99,
+        use_gae: bool = True,
+        gae_lambda: float = 0.95,
+        max_grad_norm: float = 0.5,
+        normalize_advantage: bool = True,
+        advance_scene_rollout_period: Optional[int] = None,
+        extra_losses: Optional[Dict[str, Tuple[AbstractActorCriticLoss, float]]] = None,
+    ) -> TrainingPipeline:
+
+        ppo_steps = training_steps - pretrain_steps
+        assert ppo_steps > 0
+
+        named_losses = {
+            "ppo_loss": (
+                PPO(**PPOConfig, normalize_advantage=normalize_advantage),
+                1.0,
+            ),
+            "imitation_loss": (
+                Imitation(),
+                1.0,
+            ),
+            **({} if extra_losses is None else extra_losses),
+        }
+        named_losses = update_with_auxiliary_losses(
+            named_losses=named_losses,
+            auxiliary_uuids=auxiliary_uuids,
+            multiple_beliefs=multiple_beliefs,
+        )
+
+        return TrainingPipeline(
+            save_interval=save_interval,
+            metric_accumulate_interval=log_interval,
+            optimizer_builder=Builder(optim.Adam, dict(lr=lr)),
+            num_mini_batch=num_mini_batch,
+            update_repeats=update_repeats,
+            max_grad_norm=max_grad_norm,
+            num_steps=num_steps,
+            named_losses={key: val[0] for key, val in named_losses.items()},
+            gamma=gamma,
+            use_gae=use_gae,
+            gae_lambda=gae_lambda,
+            advance_scene_rollout_period=advance_scene_rollout_period,
+            pipeline_stages=[
+                PipelineStage(
+                    loss_names=["imitation_loss"],
+                    max_stage_steps=pretrain_steps,
+                    teacher_forcing=LinearDecay(startp=1.0, endp=1.0, steps=pretrain_steps,),
+                ),
+                PipelineStage(
+                    loss_names=["ppo_loss"],
+                    max_stage_steps=ppo_steps,
+                    loss_weights=[val[1] for name, val in named_losses.items() if name is not "imitation_loss"],
+                )
+            ],
+            lr_scheduler_builder=Builder(
+                LambdaLR, {"lr_lambda": LinearDecay(steps=training_steps)},
+            ),
+        )
+
+
 def update_with_auxiliary_losses(
     named_losses: Dict[str, Tuple[AbstractActorCriticLoss, float]],
     auxiliary_uuids: Sequence[str],

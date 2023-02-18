@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import abc
+import einops
 import random
 from typing import (
     Union,
@@ -168,6 +169,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         self._actions_full: Optional[torch.Tensor] = None
         self._prev_actions_full: Optional[torch.Tensor] = None
 
+        self._belief_states_full: Optional[torch.Tensor] = None
+
     def initialize(
         self,
         *,
@@ -197,6 +200,10 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             )
             self._prev_actions_full = torch.zeros(
                 self.full_size + 1, num_samplers, action_flat_dim, device=self.device
+            )
+
+            self._belief_states_full = torch.zeros(
+                self.full_size, num_samplers, 512, device=self.device
             )
 
         assert self.step == 0, "Must call `after_updates` before calling `initialize`"
@@ -234,6 +241,10 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
     @property
     def actions(self) -> torch.Tensor:
         return self._actions_full[: self.step]
+    
+    @property
+    def belief_states(self) -> torch.Tensor:
+        return self._belief_states_full[: self.step]
 
     @property
     def prev_actions(self) -> torch.Tensor:
@@ -281,6 +292,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             "_value_preds_full",
             "_returns_full",
             "_action_log_probs_full",
+            "_belief_states_full",
         ]:
             val = getattr(self, key)
             if val is not None:
@@ -415,6 +427,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         self._returns_full = pad_tensor_with_zeros(self._returns_full)
         self._action_log_probs_full = pad_tensor_with_zeros(self._action_log_probs_full)
 
+        self._belief_states_full = pad_tensor_with_zeros(self._belief_states_full)
+
         self.full_size *= 2
 
     def add(
@@ -447,6 +461,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         self._actions_full[self.step].copy_(actions)  # type:ignore
         self._prev_actions_full[self.step + 1].copy_(actions)  # type:ignore
         self._masks_full[self.step + 1].copy_(masks)  # type:ignore
+
+        self._belief_states_full[self.step].copy_(einops.rearrange(memory['single_belief'][0], '1 n c -> n c'))  # type:ignore
 
         if self._rewards_full is None:
             # We delay the instantiation of storage for `rewards`, `value_preds`, `action_log_probs` and `returns`
@@ -492,6 +508,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         self._prev_actions_full = self._prev_actions_full[:, keep_list]
         self._action_log_probs_full = self._action_log_probs_full[:, keep_list]
         self._masks_full = self._masks_full[:, keep_list]
+
+        self._belief_states_full = self._belief_states_full[:, keep_list]
 
         if self._rewards_full is not None:
             self._value_preds_full = self._value_preds_full[:, keep_list]
@@ -615,6 +633,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             old_action_log_probs_batch = []
             adv_targ = []
             norm_adv_targ = []
+            belief_states_batch = []
 
             for ind in cur_samplers:
                 actions_batch.append(self.actions[:, ind])
@@ -627,6 +646,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
                 adv_targ.append(self._advantages[:, ind])
                 norm_adv_targ.append(self._normalized_advantages[:, ind])
 
+                belief_states_batch.append(self.belief_states[:, ind])
+
             actions_batch = torch.stack(actions_batch, 1)  # type:ignore
             prev_actions_batch = torch.stack(prev_actions_batch, 1)  # type:ignore
             value_preds_batch = torch.stack(value_preds_batch, 1)  # type:ignore
@@ -637,6 +658,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             )
             adv_targ = torch.stack(adv_targ, 1)  # type:ignore
             norm_adv_targ = torch.stack(norm_adv_targ, 1)  # type:ignore
+            belief_states_batch = torch.stack(belief_states_batch, 1)  # type:ignore
 
             yield {
                 "observations": observations_batch,
@@ -649,6 +671,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
                 "old_action_log_probs": old_action_log_probs_batch,
                 "adv_targ": adv_targ,
                 "norm_adv_targ": norm_adv_targ,
+                "belief_states": belief_states_batch,
                 "bsize": int(np.prod(masks_batch.shape[:2])),
             }
 

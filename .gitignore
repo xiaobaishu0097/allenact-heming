@@ -201,3 +201,6 @@ src
 *.lock
 rsync-*
 storage
+
+allenact_plugins/foundation_model_plugin/checkpoints/*
+!allenact_plugins/foundation_model_plugin/checkpoints/README.md

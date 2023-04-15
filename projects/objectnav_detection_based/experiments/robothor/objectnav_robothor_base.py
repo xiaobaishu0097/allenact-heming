@@ -22,7 +22,7 @@ class ObjectNavRoboThorBaseConfig(ObjectNavThorBaseConfig, ABC):
 
     TRAIN_DATASET_DIR = os.path.join(os.getcwd(), "datasets/robothor-objectnav/train")
     VAL_DATASET_DIR = os.path.join(os.getcwd(), "datasets/robothor-objectnav/val")
-    TEST_DATASET_DIR = os.path.join(os.getcwd(), "datasets/robothor-objectnav/test")
+    # TEST_DATASET_DIR = os.path.join(os.getcwd(), "datasets/robothor-objectnav/test")
 
     TARGET_TYPES = tuple(
         sorted(

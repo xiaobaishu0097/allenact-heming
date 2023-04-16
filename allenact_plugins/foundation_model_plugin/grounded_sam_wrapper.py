@@ -42,7 +42,7 @@ class GroundedSAMWrapper:
     def frozen_parameters(self) -> None:
         for param in self.grounding_dino_model.parameters():
             param.requires_grad = False
-        for param in self.segment_anything_model.parameters():
+        for param in self.segment_anything_model.model.parameters():
             param.requires_grad = False
 
     def load_grounding_dino_model(self):
@@ -61,8 +61,6 @@ class GroundedSAMWrapper:
     def grounding_dino_model(self):
         if not hasattr(self, '_grounding_dino_model'):
             self._grounding_dino_model = self.load_grounding_dino_model()
-            self.logger.info(
-                f'Process {os.getpid()} on {self.device} renew the model')
         return self._grounding_dino_model
 
     def load_image_dino(self, image_path):

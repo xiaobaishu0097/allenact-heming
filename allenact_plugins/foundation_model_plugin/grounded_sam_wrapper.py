@@ -1,16 +1,11 @@
-import sys
 import os
-
-GROUNDED_SAM_DIR = '/workspace/Grounded-Segment-Anything/'
-
-sys.path.append(GROUNDED_SAM_DIR)
 
 import cv2
 import torch
 from PIL import Image
 import numpy as np
 
-from utils.logger import Logger
+from allenact.utils.system import get_logger
 
 from segment_anything import build_sam, SamPredictor
 
@@ -19,13 +14,11 @@ from submodules.grounded_sam.GroundingDINO.groundingdino.models import build_mod
 from submodules.grounded_sam.GroundingDINO.groundingdino.util.slconfig import SLConfig
 from submodules.grounded_sam.GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
 
-LOGGER_NAME = 'GroundedSAMWrapper'
-
 
 class GroundedSAMWrapper:
 
     def __init__(self, configs: dict) -> None:
-        self.logger = Logger.get_logger(name=LOGGER_NAME)
+        self.logger = get_logger()
 
         self.device = configs['device'] if 'device' in configs else 'cuda'
 
@@ -40,14 +33,17 @@ class GroundedSAMWrapper:
             'text_threshold'] if 'text_threshold' in configs else 0.25
 
         self.dino_config_path = configs[
-            'dino_config_path'] if 'dino_config_path' in configs else os.path.join(
-                GROUNDED_SAM_DIR,
-                'GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py'
-            )
+            'dino_config_path'] if 'dino_config_path' in configs else './submodules/grounded_sam/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py'
 
     def init_grounded_sam_models(self) -> None:
         self.grounding_dino_model
         self.segment_anything_model
+
+    def frozen_parameters(self) -> None:
+        for param in self.grounding_dino_model.parameters():
+            param.requires_grad = False
+        for param in self.segment_anything_model.parameters():
+            param.requires_grad = False
 
     def load_grounding_dino_model(self):
         args = SLConfig.fromfile(self.dino_config_path)
@@ -55,7 +51,7 @@ class GroundedSAMWrapper:
         checkpoint = torch.load(self.grounding_dino_checkpoint,
                                 map_location="cpu")
         model.load_state_dict(clean_state_dict(checkpoint["model"]),
-                                strict=False)
+                              strict=False)
 
         model = model.to(self.device)
         model.eval()
@@ -65,7 +61,8 @@ class GroundedSAMWrapper:
     def grounding_dino_model(self):
         if not hasattr(self, '_grounding_dino_model'):
             self._grounding_dino_model = self.load_grounding_dino_model()
-            self.logger.info(f'Process {os.getpid()} on {self.device} renew the model')
+            self.logger.info(
+                f'Process {os.getpid()} on {self.device} renew the model')
         return self._grounding_dino_model
 
     def load_image_dino(self, image_path):
@@ -113,8 +110,8 @@ class GroundedSAMWrapper:
         # build pred
         pred_phrases = []
         for logit, box in zip(logits_filt, boxes_filt):
-            pred_phrase = get_phrases_from_posmap(
-                logit > self.text_threshold, tokenized, tokenlizer)
+            pred_phrase = get_phrases_from_posmap(logit > self.text_threshold,
+                                                  tokenized, tokenlizer)
             if with_logits:
                 pred_phrases.append(pred_phrase +
                                     f"({str(logit.max().item())[:4]})")

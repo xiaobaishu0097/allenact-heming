@@ -79,7 +79,7 @@ class GroundedSAMPreprocessGRUActorCriticMixin:
                     output_dims=output_shape[0],
                     pool=False,
                     input_uuids=[rgb_sensor.uuid],
-                    output_uuid="rgb_resnet_imagenet",
+                    output_uuid="rgb_grounded_sam",
                 ))
 
         depth_sensor = next(

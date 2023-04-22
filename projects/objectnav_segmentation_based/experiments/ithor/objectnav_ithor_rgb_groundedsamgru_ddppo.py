@@ -25,7 +25,7 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
         RGBSensorThor(
             height=ObjectNaviThorBaseConfig.SCREEN_SIZE,
             width=ObjectNaviThorBaseConfig.SCREEN_SIZE,
-            use_resnet_normalization=True,
+            use_resnet_normalization=False,
             uuid="rgb_lowres",
         ),
         GoalObjectTypeThorSensor(object_types=ObjectNaviThorBaseConfig.TARGET_TYPES,),
@@ -45,6 +45,7 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
             auxiliary_uuids=[],
             multiple_beliefs=False,
             advance_scene_rollout_period=self.ADVANCE_SCENE_ROLLOUT_PERIOD,
+            num_steps=64
         )
 
     def preprocessors(self) -> Sequence[Union[Preprocessor, Builder[Preprocessor]]]:
@@ -57,4 +58,4 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
 
     @classmethod
     def tag(cls):
-        return "ObjectNav-iTHOR-RGB-ResNet18GRU-DDPPO"
+        return "ObjectNav-iTHOR-RGB-GroundedSAMGRU-DDPPO"

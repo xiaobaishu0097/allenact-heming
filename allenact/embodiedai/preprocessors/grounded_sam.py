@@ -1,24 +1,17 @@
-from typing import List, Callable, Optional, Any, cast, Dict
-
-import os
 import argparse
-import einops
 import sys
+from typing import Any, Callable, Dict, List, Optional, cast
+
+import einops
 import gym
 import numpy as np
 import torch
 import torch.nn as nn
-from torchvision import models
 from torchvision import transforms
 
 from allenact.base_abstractions.preprocessor import Preprocessor
 from allenact.utils.misc_utils import prepare_locals_for_super
-
 from allenact_plugins.foundation_model_plugin import GroundedSAMWrapper
-
-from submodules.detr.apis.inference import (inference_detector, init_detector,
-                                            make_detr_transforms)
-from submodules.detr.util.parse import get_args_parser
 
 TARGETS = [
     'AlarmClock',
@@ -80,7 +73,7 @@ class GroundedSAMEmbedder(nn.Module):
         argv = sys.argv
         sys.argv = []
         args = get_grounded_sam_args_parser().parse_args()
-        args.device = device
+        # args.device = device
 
         # args.grounding_dino_checkpoint = os.path.join(os.getcwd(), args.grounding_dino_checkpoint)
         # args.sam_checkpoint = os.path.join(os.getcwd(), args.sam_checkpoint)
@@ -105,73 +98,33 @@ class GroundedSAMEmbedder(nn.Module):
     def segment_anything_model(self):
         return self.grounded_sam_wrapper.segment_anything_model
 
-    def embed_detection_results(self, scores, labels, boxes, output, target):
-        """
-        score: (batch_size, num_detections)
-        labels: (batch_size, num_detections)
-        boxes: (batch_size, num_detections, 4)
-        """
-        current_detection_features = torch.cat((
-            output['encoder_features'],
-            scores,
-            labels,
-            boxes,
-        ),
-                                               dim=-1)
+    def preprocess_caption(self, caption: str) -> str:
+        result = caption.lower().strip()
+        if result.endswith("."):
+            return result
+        return result + "."
 
-        sorted_labels, sort_index = torch.sort(labels, dim=1)
-
-        current_detection_features = torch.gather(
-            current_detection_features, 1,
-            sort_index.expand_as(current_detection_features))
-        current_detection_features[(sorted_labels == (
-            len(TARGETS) + 1)).expand_as(current_detection_features)] = 0
-
-        detection_inputs = {
-            'features': current_detection_features[..., :256],
-            'scores': current_detection_features[..., 256, None],
-            'labels': current_detection_features[..., 257, None],
-            'bboxes': current_detection_features[..., -4:],
-            'target': target,
-        }
-
-        # generate target indicator array based on detection results labels
-        detection_inputs['indicator'] = (
-            detection_inputs['labels'] == einops.repeat(
-                target, 'b -> b n 1',
-                n=100).expand_as(detection_inputs['labels'])).float()
-
-        return detection_inputs
-
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         with torch.no_grad():
             # FIXME: check the input format and type convertion
             image = einops.rearrange(x['rgb_lowres'], 'b h w c -> b c h w')
 
-            # TODO: input the RGB image and output the segmenation maps
-            output = inference_detector(self.detector, self.transform(image),
-                                        None)
-            result = self.postprocessor['bbox'](
-                output,
-                einops.repeat(self.image_size,
-                              '1 s -> b s',
-                              b=output['pred_logits'].shape[0]))
+            try:
+                #
+                conjunction = ', '
+                target_classes = [
+                    TARGETS[item] for item in x['goal_object_type_ind']
+                ]
+                semantic_masks = self.grounded_sam_wrapper.generate_target_semantic_mask(
+                    image, [
+                        self.preprocess_caption(
+                            conjunction.join([target_class, 'ground']))
+                        for target_class in target_classes
+                    ])
+            except:
+                print('something went wrong')
 
-            pred_scores = torch.cat(
-                [einops.rearrange(x['scores'], 'l -> 1 l 1') for x in result],
-                dim=0)
-            pred_labels = torch.cat(
-                [einops.rearrange(x['labels'], 'l -> 1 l 1') for x in result],
-                dim=0)
-            pred_boxes = torch.cat(
-                [einops.rearrange(x['boxes'], 'l b -> 1 l b') for x in result],
-                dim=0)
-
-            detection_outputs = self.embed_detection_results(
-                pred_scores, pred_labels, pred_boxes, output,
-                x['goal_object_type_ind'])
-
-            return detection_outputs
+            return semantic_masks
 
 
 class GroundedSAMPreprocessor(Preprocessor):

@@ -372,7 +372,7 @@ class ResnetTensorGoalEncoder(nn.Module):
         use_agent = False
         nagent = 1
 
-        if len(resnet.shape) == 6:
+        if len(resnet.shape) == 6: # torch.Size([1, 1, 512, 7, 7])
             use_agent = True
             nstep, nsampler, nagent = resnet.shape[:3]
         else:

@@ -50,6 +50,7 @@ class GroundedSAMPreprocessGRUActorCriticMixin:
 
     screen_size: int = attr.ib()
     goal_sensor_type: Type[Sensor] = attr.ib()
+    target_list: list[str] = attr.ib()
 
     def preprocessors(
             self) -> Sequence[Union[Preprocessor, Builder[Preprocessor]]]:
@@ -80,6 +81,7 @@ class GroundedSAMPreprocessGRUActorCriticMixin:
                     pool=False,
                     input_uuids=[rgb_sensor.uuid],
                     output_uuid="rgb_grounded_sam",
+                    target_list=self.target_list,
                 ))
 
         depth_sensor = next(

@@ -13,22 +13,6 @@ from allenact.base_abstractions.preprocessor import Preprocessor
 from allenact.utils.misc_utils import prepare_locals_for_super
 from allenact_plugins.foundation_model_plugin import GroundedSAMWrapper
 
-TARGETS = [
-    'AlarmClock',
-    'Apple',
-    'BaseballBat',
-    'BasketBall',
-    'Bowl',
-    'GarbageCan',
-    'HousePlant',
-    'Laptop',
-    'Mug',
-    'RemoteControl',
-    'SprayBottle',
-    'Television',
-    'Vase',
-]
-
 
 def get_grounded_sam_args_parser():
     parser = argparse.ArgumentParser('Set Grounded Segment-Anything',
@@ -67,7 +51,7 @@ def get_grounded_sam_args_parser():
 # TODO: edit this to use the new grounded SAM
 class GroundedSAMEmbedder(nn.Module):
 
-    def __init__(self, device: torch.device):
+    def __init__(self, target_list: list[str], device: torch.device):
         super().__init__()
 
         argv = sys.argv
@@ -83,6 +67,7 @@ class GroundedSAMEmbedder(nn.Module):
         self.transform = transforms.Resize(800)
 
         self.grounded_sam_wrapper = GroundedSAMWrapper(vars(args))
+        self.target_list = target_list
 
         self.grounded_sam_wrapper.frozen_parameters()
         self.image_size = nn.Parameter(torch.tensor([[224, 224]]),
@@ -109,20 +94,16 @@ class GroundedSAMEmbedder(nn.Module):
             # FIXME: check the input format and type convertion
             image = einops.rearrange(x['rgb_lowres'], 'b h w c -> b c h w')
 
-            try:
-                #
-                conjunction = ', '
-                target_classes = [
-                    TARGETS[item] for item in x['goal_object_type_ind']
-                ]
-                semantic_masks = self.grounded_sam_wrapper.generate_target_semantic_mask(
-                    image, [
-                        self.preprocess_caption(
-                            conjunction.join([target_class, 'ground']))
-                        for target_class in target_classes
-                    ])
-            except:
-                print('something went wrong')
+            conjunction = ', '
+            target_classes = [
+                self.target_list[item] for item in x['goal_object_type_ind']
+            ]
+            semantic_masks = self.grounded_sam_wrapper.generate_target_semantic_mask(
+                image, [
+                    self.preprocess_caption(
+                        conjunction.join([target_class, 'ground']))
+                    for target_class in target_classes
+                ])
 
             return semantic_masks
 
@@ -132,6 +113,7 @@ class GroundedSAMPreprocessor(Preprocessor):
 
     def __init__(
         self,
+        target_list: List[str],
         input_uuids: List[str],
         output_uuid: str,
         input_height: int,
@@ -150,6 +132,7 @@ class GroundedSAMPreprocessor(Preprocessor):
         self.output_width = output_width
         self.output_dims = output_dims
         self.pool = pool
+        self.target_list = target_list
 
         self.device = torch.device("cpu") if device is None else device
         self.device_ids = device_ids or cast(
@@ -171,7 +154,8 @@ class GroundedSAMPreprocessor(Preprocessor):
     @property
     def grounded_sam(self) -> GroundedSAMEmbedder:
         if self._grounded_sam is None:
-            self._grounded_sam = GroundedSAMEmbedder(device=self.device)
+            self._grounded_sam = GroundedSAMEmbedder(
+                target_list=self.target_list, device=self.device)
         return self._grounded_sam
 
     def to(self, device: torch.device) -> "GroundedSAMPreprocessor":

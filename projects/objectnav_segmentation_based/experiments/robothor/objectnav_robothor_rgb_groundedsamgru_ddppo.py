@@ -8,8 +8,8 @@ from allenact_plugins.ithor_plugin.ithor_sensors import (
     GoalObjectTypeThorSensor,
     RGBSensorThor,
 )
-from projects.objectnav_baselines.experiments.ithor.objectnav_ithor_base import (
-    ObjectNaviThorBaseConfig,
+from projects.objectnav_detection_based.experiments.robothor.objectnav_robothor_base import (
+    ObjectNavRoboThorBaseConfig,
 )
 from projects.objectnav_segmentation_based.mixins import (
     GroundedSAMPreprocessGRUActorCriticMixin,
@@ -17,18 +17,20 @@ from projects.objectnav_segmentation_based.mixins import (
 )
 
 
-class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
-    """An Object Navigation experiment configuration in iThor with RGB
+class ObjectNavRoboThorRGBPPOExperimentConfig(ObjectNavRoboThorBaseConfig):
+    """An Object Navigation experiment configuration in RoboThor with RGB
     input."""
 
     SENSORS = [
         RGBSensorThor(
-            height=ObjectNaviThorBaseConfig.SCREEN_SIZE,
-            width=ObjectNaviThorBaseConfig.SCREEN_SIZE,
-            use_resnet_normalization=False,
+            height=ObjectNavRoboThorBaseConfig.SCREEN_SIZE,
+            width=ObjectNavRoboThorBaseConfig.SCREEN_SIZE,
+            use_resnet_normalization=True,
             uuid="rgb_lowres",
         ),
-        GoalObjectTypeThorSensor(object_types=ObjectNaviThorBaseConfig.TARGET_TYPES,),
+        GoalObjectTypeThorSensor(
+            object_types=ObjectNavRoboThorBaseConfig.TARGET_TYPES,
+        ),
     ]
 
     def __init__(self, **kwargs):
@@ -59,4 +61,4 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
 
     @classmethod
     def tag(cls):
-        return "ObjectNav-iTHOR-RGB-GroundedSAMGRU-DDPPO"
+        return "ObjectNav-RoboTHOR-RGB-GroundedSAMGRU-DDPPO"

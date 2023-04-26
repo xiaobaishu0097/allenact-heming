@@ -34,7 +34,11 @@ class ObjectNavRoboThorRGBPPOExperimentConfig(ObjectNavRoboThorBaseConfig):
     ]
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        # filter kwargs for the sake of the superclass
+        super_kwargs = {
+            k: kwargs[k] for k in kwargs if k in ObjectNavRoboThorBaseConfig.__init__.__code__.co_varnames
+        }
+        super().__init__(**super_kwargs)
 
         self.preprocessing_and_model = GroundedSAMPreprocessGRUActorCriticMixin(
             target_list=list(self.TARGET_TYPES),
@@ -48,7 +52,7 @@ class ObjectNavRoboThorRGBPPOExperimentConfig(ObjectNavRoboThorBaseConfig):
             auxiliary_uuids=[],
             multiple_beliefs=False,
             advance_scene_rollout_period=self.ADVANCE_SCENE_ROLLOUT_PERIOD,
-            num_steps=8,
+            num_steps=kwargs['num_steps'] if 'num_steps' in kwargs else 8,
         )
 
     def preprocessors(self) -> Sequence[Union[Preprocessor, Builder[Preprocessor]]]:

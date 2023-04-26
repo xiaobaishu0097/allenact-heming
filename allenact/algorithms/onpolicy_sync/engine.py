@@ -201,7 +201,7 @@ class OnPolicyRLEngine(object):
 
             set_seed(self.seed)
             self.actor_critic = cast(
-                ActorCriticModel, self.config.create_model(**create_model_kwargs),
+                ActorCriticModel, self.config.create_model(**create_model_kwargs, **kwargs),
             ).to(self.device)
 
         if initial_model_state_dict is not None:
@@ -768,7 +768,7 @@ class OnPolicyTrainer(OnPolicyRLEngine):
 
         self.actor_critic.train()
 
-        self.training_pipeline: TrainingPipeline = config.training_pipeline()
+        self.training_pipeline: TrainingPipeline = config.training_pipeline(**kwargs)
 
         if self.num_workers != 1:
             # Ensure that we're only using early stopping criterions in the non-distributed setting.

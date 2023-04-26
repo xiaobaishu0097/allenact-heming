@@ -125,6 +125,7 @@ class GroundedSAMPreprocessGRUActorCriticMixin:
             if has_depth else None,
             hidden_size=512,
             goal_dims=32,
+            vit_encoder_layers=kwargs['vit_encoder_layers'] if 'vit_encoder_layers' in kwargs else None,
         )
 
 

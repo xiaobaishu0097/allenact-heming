@@ -42,13 +42,20 @@ def get_2d_positional_embedding(size_feature_map,
 
 class CustomViT(nn.Module):
 
-    def __init__(self, mask_channels=2, img_size=224, embed_dim=512):
+    def __init__(self,
+                 encoder_layers: Optional[int] = None,
+                 mask_channels: Optional[int] = 2,
+                 img_size: Optional[int] = 224,
+                 embed_dim: Optional[int] = 512):
         super(CustomViT, self).__init__()
         self.vit = timm.create_model("vit_base_patch16_224",
                                      pretrained=False,
                                      img_size=img_size,
                                      in_chans=mask_channels,
                                      num_classes=embed_dim)
+
+        if encoder_layers is not None:
+            self.vit.blocks = self.vit.blocks[:encoder_layers]
 
         # Modify the ViT's head to produce the desired output feature shape
         self.vit.head = nn.Sequential(
@@ -62,13 +69,14 @@ class CustomViT(nn.Module):
 class GroundedSAMTensorGoalEncoder(nn.Module):
 
     def __init__(
-            self,
-            observation_spaces: SpaceDict,
-            goal_sensor_uuid: str,
-            grounded_sam_preprocessor_uuid: str,
-            goal_embed_dims: int = 32,
-            resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
-            combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        self,
+        observation_spaces: SpaceDict,
+        goal_sensor_uuid: str,
+        grounded_sam_preprocessor_uuid: str,
+        goal_embed_dims: int = 32,
+        resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
+        combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        vit_encoder_layers: Optional[int] = None,
     ) -> None:
         super().__init__()
         self.goal_uuid = goal_sensor_uuid
@@ -85,7 +93,9 @@ class GroundedSAMTensorGoalEncoder(nn.Module):
                 self.grounded_sam_uuid].shape
 
             # a VIT encoder to process the (300, 300, 2) binary mask as input and output a feature with (512, 1, 1)
-            self.vit_encoder = CustomViT(mask_channels=2, embed_dim=512)
+            self.vit_encoder = CustomViT(encoder_layers=vit_encoder_layers,
+                                         mask_channels=2,
+                                         embed_dim=512)
 
     @property
     def is_blind(self):
@@ -341,6 +351,7 @@ class GroundedSAMTensorNavActorCritic(VisualNavActorCritic):
             goal_dims: int = 32,
             resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
             combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+            vit_encoder_layers: Optional[int] = None,
     ):
         super().__init__(
             action_space=action_space,
@@ -364,6 +375,7 @@ class GroundedSAMTensorNavActorCritic(VisualNavActorCritic):
                 goal_dims,
                 resnet_compressor_hidden_out_dims,
                 combiner_hidden_out_dims,
+                vit_encoder_layers=vit_encoder_layers,
             )
         else:
             self.goal_visual_encoder = ResnetDualGroundedSAMTensorGoalEncoder(  # type:ignore

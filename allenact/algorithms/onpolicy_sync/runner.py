@@ -456,6 +456,7 @@ class OnPolicyRunner(object):
         collect_valid_results: bool = False,
         valid_on_initial_weights: bool = False,
         try_restart_after_task_error: bool = False,
+        **kwargs,
     ):
         self._initialize_start_train_or_start_test()
 
@@ -473,7 +474,7 @@ class OnPolicyRunner(object):
         initial_model_state_dict = self.config.create_model(
             sensor_preprocessor_graph=MachineParams.instance_from(
                 self.config.machine_params(self.mode)
-            ).sensor_preprocessor_graph
+            ).sensor_preprocessor_graph, **kwargs
         ).state_dict()
 
         distributed_port = 0 if num_workers == 1 else self.get_port()
@@ -519,6 +520,7 @@ class OnPolicyRunner(object):
                 distributed_preemption_threshold=self.distributed_preemption_threshold,
                 valid_on_initial_weights=valid_on_initial_weights,
                 try_restart_after_task_error=try_restart_after_task_error,
+                **kwargs,
             )
             train: BaseProcess = self.mp_ctx.Process(
                 target=self.train_loop, kwargs=training_kwargs,

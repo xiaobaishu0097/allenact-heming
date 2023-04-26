@@ -478,6 +478,7 @@ def main():
             collect_valid_results=args.collect_valid_results,
             valid_on_initial_weights=args.valid_on_initial_weights,
             try_restart_after_task_error=args.enable_crash_recovery,
+            **json.loads(srcs['__CONFIG_KWARGS__']),
         )
     else:
         OnPolicyRunner(

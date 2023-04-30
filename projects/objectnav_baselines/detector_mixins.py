@@ -45,7 +45,7 @@ from allenact_plugins.navigation_plugin.objectnav.models import (
     ResnetTensorNavActorCritic,
     ObjectNavActorCritic,
 )
-from allenact_plugins.navigation_plugin.objectnav.detector_models import ResnetDETRTensorNavActorCritic
+from allenact_plugins.navigation_plugin.objectnav.detr_models import ResnetDETRTensorNavActorCritic
 from allenact_plugins.robothor_plugin.robothor_tasks import ObjectNavTask
 
 

@@ -15,7 +15,7 @@ from allenact_plugins.robothor_plugin.robothor_tasks import ObjectNavTask
 from projects.objectnav_detection_based.experiments.robothor.objectnav_robothor_base import (
     ObjectNavRoboThorBaseConfig,
 )
-from projects.objectnav_detection_based.mixins_detection_based import ResNetDETRPreprocessGRUActorCriticMixin
+from projects.objectnav_detection_based.mixins import ResNetDETRPreprocessGRUActorCriticMixin
 from projects.objectnav_detection_based.mixins import ObjectNavDAggerMixin
 
 

@@ -11,7 +11,7 @@ from allenact_plugins.ithor_plugin.ithor_sensors import (
 from projects.objectnav_detection_based.experiments.robothor.objectnav_robothor_base import (
     ObjectNavRoboThorBaseConfig,
 )
-from projects.objectnav_detection_based.mixins_detection_based import ResNetDETRPreprocessGRUActorCriticMixin
+from projects.objectnav_detection_based.mixins import ResNetDETRPreprocessGRUActorCriticMixin
 from projects.objectnav_detection_based.mixins import ObjectNavPPOMixin
 
 from allenact.algorithms.onpolicy_sync.losses.hbsr import HBSR

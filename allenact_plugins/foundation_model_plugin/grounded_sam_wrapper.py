@@ -72,18 +72,6 @@ class GroundedSAMWrapper:
             self._grounding_dino_model = self.load_grounding_dino_model()
         return self._grounding_dino_model
 
-    def load_image_dino(self, image_path):
-        # load image
-        image_pil = Image.open(image_path).convert("RGB")  # load image
-
-        transform = T.Compose([
-            T.RandomResize([800], max_size=1333),
-            T.ToTensor(),
-            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ])
-        image, _ = transform(image_pil, None)  # 3, h, w
-        return image_pil, image
-
     def check_device_attr(self):
         if self.device != self.segment_anything_model.device:
             self.device = self.segment_anything_model.device
@@ -246,32 +234,13 @@ class GroundedSAMWrapper:
 
         return torch.stack(batch_sam_proposal_masks)
 
-    def generate_grounding_dino_bounding_boxes(self, image_path: str,
-                                               text_prompt: str) -> dict:
-        image_pil, image = self.load_image_dino(image_path)
-        boxes_filt, _, pred_phrases = self.get_grounding_dino_output(
-            torch.tensor(image), text_prompt)
-        return {'boxes': boxes_filt, 'pred_phrases': pred_phrases}
-
     @property
     def segment_anything_model(self):
         if not hasattr(self, '_segment_anything_model'):
             self._segment_anything_model = SamPredictor(
                 build_sam(checkpoint=self.sam_checkpoint).to(self.device))
 
-            # if self.device != self.segment_anything_model.device:
-            # self.device = self.segment_anything_model.device
-
         return self._segment_anything_model
-
-    # @property
-    # def device(self):
-    #     return self.segment_anything_model.device
-
-    def load_image_sam(self, image_path: str):
-        image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        return image
 
     @torch.no_grad()
     def generate_object_sam_proposal_masks(self, image: torch.Tensor,

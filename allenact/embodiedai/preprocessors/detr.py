@@ -17,11 +17,24 @@ from submodules.detr.apis.inference import (inference_detector, init_detector,
 from submodules.detr.util.parse import get_args_parser
 
 TARGETS = [
-    'AlarmClock', 'Apple', 'BaseballBat', 'BasketBall', 'Bowl', 'GarbageCan', 'HousePlant',
-    'Laptop', 'Mug', 'RemoteControl', 'SprayBottle', 'Television', 'Vase',
+    'AlarmClock',
+    'Apple',
+    'BaseballBat',
+    'BasketBall',
+    'Bowl',
+    'GarbageCan',
+    'HousePlant',
+    'Laptop',
+    'Mug',
+    'RemoteControl',
+    'SprayBottle',
+    'Television',
+    'Vase',
 ]
 
+
 class DETREmbedder(nn.Module):
+
     def __init__(self, detr_path: Optional[str] = None):
         super().__init__()
 
@@ -44,7 +57,8 @@ class DETREmbedder(nn.Module):
         for param in self.detector.parameters():
             param.requires_grad = False
 
-        self.image_size = nn.Parameter(torch.tensor([[224, 224]]), requires_grad=False)
+        self.image_size = nn.Parameter(torch.tensor([[224, 224]]),
+                                       requires_grad=False)
 
         self.eval()
 
@@ -54,13 +68,21 @@ class DETREmbedder(nn.Module):
         labels: (batch_size, num_detections)
         boxes: (batch_size, num_detections, 4)
         """
-        current_detection_features = torch.cat(
-            (output['encoder_features'], scores, labels, boxes,), dim=-1)
+        current_detection_features = torch.cat((
+            output['encoder_features'],
+            scores,
+            labels,
+            boxes,
+        ),
+                                               dim=-1)
 
         sorted_labels, sort_index = torch.sort(labels, dim=1)
 
-        current_detection_features = torch.gather(current_detection_features, 1, sort_index.expand_as(current_detection_features))
-        current_detection_features[(sorted_labels==(len(TARGETS)+1)).expand_as(current_detection_features)] = 0
+        current_detection_features = torch.gather(
+            current_detection_features, 1,
+            sort_index.expand_as(current_detection_features))
+        current_detection_features[(sorted_labels == (
+            len(TARGETS) + 1)).expand_as(current_detection_features)] = 0
 
         detection_inputs = {
             'features': current_detection_features[..., :256],
@@ -71,7 +93,10 @@ class DETREmbedder(nn.Module):
         }
 
         # generate target indicator array based on detection results labels
-        detection_inputs['indicator'] = (detection_inputs['labels'] == einops.repeat(target, 'b -> b n 1', n=100).expand_as(detection_inputs['labels'])).float()
+        detection_inputs['indicator'] = (
+            detection_inputs['labels'] == einops.repeat(
+                target, 'b -> b n 1',
+                n=100).expand_as(detection_inputs['labels'])).float()
 
         return detection_inputs
 
@@ -79,17 +104,29 @@ class DETREmbedder(nn.Module):
         with torch.no_grad():
             # FIXME: check the input format and type convertion
             image = einops.rearrange(x['rgb_lowres'], 'b h w c -> b c h w')
-            output = inference_detector(self.detector, self.transform(image), None)
-            result = self.postprocessor['bbox'](output, einops.repeat(self.image_size, '1 s -> b s', b=output['pred_logits'].shape[0]))
+            output = inference_detector(self.detector, self.transform(image),
+                                        None)
+            result = self.postprocessor['bbox'](
+                output,
+                einops.repeat(self.image_size,
+                              '1 s -> b s',
+                              b=output['pred_logits'].shape[0]))
 
-            pred_scores = torch.cat([einops.rearrange(x['scores'], 'l -> 1 l 1') for x in result], dim=0)
-            pred_labels = torch.cat([einops.rearrange(x['labels'], 'l -> 1 l 1') for x in result], dim=0)
-            pred_boxes = torch.cat([einops.rearrange(x['boxes'], 'l b -> 1 l b') for x in result], dim=0)
+            pred_scores = torch.cat(
+                [einops.rearrange(x['scores'], 'l -> 1 l 1') for x in result],
+                dim=0)
+            pred_labels = torch.cat(
+                [einops.rearrange(x['labels'], 'l -> 1 l 1') for x in result],
+                dim=0)
+            pred_boxes = torch.cat(
+                [einops.rearrange(x['boxes'], 'l b -> 1 l b') for x in result],
+                dim=0)
 
-            detection_outputs = self.embed_detection_results(pred_scores, pred_labels, pred_boxes, output, x['goal_object_type_ind'])
+            detection_outputs = self.embed_detection_results(
+                pred_scores, pred_labels, pred_boxes, output,
+                x['goal_object_type_ind'])
 
             return detection_outputs
-
 
 
 class DETRPreprocessor(Preprocessor):
@@ -105,7 +142,8 @@ class DETRPreprocessor(Preprocessor):
         output_width: int,
         output_dims: int,
         pool: bool,
-        torchvision_resnet_model: Callable[..., models.ResNet] = models.resnet18,
+        torchvision_resnet_model: Callable[...,
+                                           models.ResNet] = models.resnet18,
         device: Optional[torch.device] = None,
         device_ids: Optional[List[torch.device]] = None,
         **kwargs: Any,
@@ -119,8 +157,7 @@ class DETRPreprocessor(Preprocessor):
 
         self.device = torch.device("cpu") if device is None else device
         self.device_ids = device_ids or cast(
-            List[torch.device], list(range(torch.cuda.device_count()))
-        )
+            List[torch.device], list(range(torch.cuda.device_count())))
 
         self._detr: Optional[DETREmbedder] = None
 
@@ -128,9 +165,8 @@ class DETRPreprocessor(Preprocessor):
         high = np.inf
         shape = (self.output_dims, self.output_height, self.output_width)
 
-        assert (
-            len(input_uuids) == 1
-        ), "resnet preprocessor can only consume one observation type"
+        assert (len(input_uuids) == 1
+                ), "resnet preprocessor can only consume one observation type"
 
         observation_space = gym.spaces.Box(low=low, high=high, shape=shape)
 

@@ -1,1 +1,2 @@
 from .grounded_sam_wrapper import GroundedSAMWrapper
+from .grounding_dino_wrapper import GroundingDINOWrapper

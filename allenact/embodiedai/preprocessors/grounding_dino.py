@@ -1,6 +1,7 @@
 import argparse
+import random
 import sys
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import einops
 import gym
@@ -118,7 +119,7 @@ class GroundingDINOEmbedder(nn.Module):
                                             pred_features: torch.Tensor,
                                             target_class,
                                             **kwargs) -> torch.Tensor:
-        
+
         detection_results = torch.zeros(
             (1, 64, pred_features.shape[-1] + 7),
             dtype=torch.float32,
@@ -129,9 +130,19 @@ class GroundingDINOEmbedder(nn.Module):
         detection_results[:, :pred_features.shape[0],
                           pred_features.shape[-1]] = pred_labels
         detection_results[:, :pred_features.shape[0],
-                          pred_features.shape[-1]+1] = pred_scores
+                          pred_features.shape[-1] + 1] = pred_scores
         detection_results[:, :pred_features.shape[0], -5:-1] = pred_boxes
-        detection_results[:, :pred_features.shape[0], -1] = target_class
+
+        target_indicator = torch.tensor(
+            [
+                True if label == target_class else False
+                for label in pred_labels
+            ],
+            dtype=torch.float32,
+            device=self.grounding_dino_wrapper.device)
+
+        detection_results[:, :pred_features.shape[0],
+                            -1] = target_indicator
 
         return detection_results
 
@@ -141,14 +152,22 @@ class GroundingDINOEmbedder(nn.Module):
             image = einops.rearrange(x['rgb_lowres'], 'b h w c -> b c h w')
 
             conjunction = ', '
-            target_classes = [
-                self.target_list[item] for item in x['goal_object_type_ind']
-            ]
-            grounding_dino_outputs = self.grounding_dino_wrapper.get_grounding_dino_output(
-                image, [
+            if self.single_class_detection:
+                target_classes = [
+                    self.target_list[item]
+                    for item in x['goal_object_type_ind']
+                ]
+                captions = [
                     self.preprocess_caption(conjunction.join([target_class]))
                     for target_class in target_classes
-                ])
+                ]
+            else:
+                captions = [
+                    self.preprocess_caption(conjunction.join(self.target_list))
+                    for _ in range(x['goal_object_type_ind'].shape[0])
+                ]
+            grounding_dino_outputs = self.grounding_dino_wrapper.get_grounding_dino_output(
+                image, captions)
 
             grounding_dino_outputs = torch.stack([
                 self.embed_detection_results(
@@ -156,21 +175,30 @@ class GroundingDINOEmbedder(nn.Module):
                         'pred_scores':
                         detection_info['logits'],
                         'pred_labels':
-                        torch.tensor(
-                            [
-                                self.target_list_lower.index(target)
-                                for target in detection_info['phrases']
-                            ],
-                            device=self.grounding_dino_wrapper.device),
+                        torch.tensor([
+                            self.target_list_lower.index(target) if target in
+                            self.target_list_lower else self.target_list_lower.
+                            index(self.complete_phrase(target))
+                            for target in detection_info['phrases']
+                        ],
+                                     device=self.grounding_dino_wrapper.device
+                                     ),
                         'pred_boxes':
                         detection_info['boxes'],
                         'pred_features':
                         detection_info['features'],
                         'target_class':
-                        x['goal_object_type_ind']
-                    }) for detection_info in grounding_dino_outputs
+                        x['goal_object_type_ind'][batch_id]
+                    }) for batch_id, detection_info in enumerate(
+                        grounding_dino_outputs)
             ])
             return grounding_dino_outputs
+
+    def complete_phrase(self, target: str) -> str:
+        for item in self.target_list_lower:
+            if target in item:
+                return item
+        return random.choice(self.target_list_lower)
 
 
 class GroundingDINOPreprocessor(Preprocessor):

@@ -41,6 +41,7 @@ class ObjectNavRoboThorRGBPPOExperimentConfig(ObjectNavRoboThorBaseConfig):
             resnet_type="RN18",
             screen_size=self.SCREEN_SIZE,
             goal_sensor_type=GoalObjectTypeThorSensor,
+            single_class_detection=True if 'single_class_detection' in kwargs and kwargs['single_class_detection'] else False,
         )
 
     def training_pipeline(self, **kwargs) -> TrainingPipeline:

@@ -96,34 +96,54 @@ class GroundingDINOWrapper:
 
         return normalized_tensor
 
+    @property
+    def tokenizer(self):
+        if not hasattr(self, '_tokenizer'):
+            self._tokenizer = self.grounding_dino_model.tokenizer
+        return self._tokenizer
+
     def extract_boxes_and_phrases(
             self,
             pred_logits: torch.Tensor,  # pred_logits.shape = (nq, 256)
             pred_boxes: torch.Tensor,  # pred_boxes.shape = (nq, 4)
-            pred_features: torch.Tensor, # pred_features.shape = (nq, 256)
+            pred_features: torch.Tensor,  # pred_features.shape = (nq, 256)
             caption: str) -> dict:
-        prediction_logits = pred_logits.sigmoid(
-        )  # prediction_logits.shape = (batch_size, nq, 256)
-        prediction_boxes = pred_boxes.clone()  # prediction_boxes.shape = (batch_size, nq, 4)
-        prediction_features = pred_features.clone() # prediction_features.shape = (batch_size, nq, 256)
+        mask = pred_logits.max(dim=-1)[0] > self.box_threshold
+        logits = pred_logits[mask]  # logits.shape = (batch_size, n, 256)
+        boxes = pred_boxes[mask]  # boxes.shape = (n, 4)
+        features = pred_features[mask]
 
-        mask = prediction_logits.max(dim=-1)[0] > self.box_threshold
-        logits = prediction_logits[mask]  # logits.shape = (batch_size, n, 256)
-        boxes = prediction_boxes[mask]  # boxes.shape = (n, 4)
-        features = prediction_features[mask]
-
-        tokenizer = self.grounding_dino_model.tokenizer
-        tokenized = tokenizer(caption)
+        tokenized = self.tokenizer(caption)
 
         phrases = [
             get_phrases_from_posmap(logit > self.text_threshold, tokenized,
-                                    tokenizer).replace('.', '')
+                                    self.tokenizer).replace('.', '')
             for logit in logits
         ]
 
+        logits = logits.max(dim=1)[0]
+        for phrase_index in range(len(phrases)):
+            # if the phrase contain space, split it and repeat the corresponding box, logits and features
+            if ' ' in phrases[phrase_index]:
+                for item in phrases[phrase_index].split(' ')[1:]:
+                    phrases.append(item)
+                    boxes = torch.cat(
+                        (boxes,
+                         einops.rearrange(boxes[phrase_index], 'n -> 1 n')),
+                        dim=0)
+                    logits = torch.cat(
+                        (logits, einops.rearrange(logits[phrase_index],
+                                                  ' -> 1')),
+                        dim=0)
+                    features = torch.cat(
+                        (features,
+                         einops.rearrange(features[phrase_index], 'n -> 1 n')),
+                        dim=0)
+                phrases[phrase_index] = phrases[phrase_index].split(' ')[0]
+
         return {
             'boxes': boxes,
-            'logits': logits.max(dim=1)[0],
+            'logits': logits,
             'phrases': phrases,
             'features': features,
         }
@@ -163,6 +183,7 @@ class GroundingDINOWrapper:
             captions=captions,
         )
         return batch_boxes_phrases
+
 
 if __name__ == '__main__':
     pass

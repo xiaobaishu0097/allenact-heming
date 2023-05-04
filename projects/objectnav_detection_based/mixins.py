@@ -118,6 +118,7 @@ class ResNetGroundingDINOPreprocessGRUActorCriticMixin:
     screen_size: int = attr.ib()
     goal_sensor_type: Type[Sensor] = attr.ib()
     target_list: list[str] = attr.ib()
+    single_class_detection: bool = attr.ib()
 
     def preprocessors(
             self) -> Sequence[Union[Preprocessor, Builder[Preprocessor]]]:
@@ -161,6 +162,7 @@ class ResNetGroundingDINOPreprocessGRUActorCriticMixin:
                         models, f"resnet{self.resnet_type.replace('RN', '')}"),
                     input_uuids=[rgb_sensor.uuid],
                     output_uuid="rgb_groundingdino",
+                    single_class_detection=self.single_class_detection,
                 ))
 
         depth_sensor = next(

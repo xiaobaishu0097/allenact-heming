@@ -51,7 +51,10 @@ def get_grounded_sam_args_parser():
 # TODO: edit this to use the new grounded SAM
 class GroundingDINOEmbedder(nn.Module):
 
-    def __init__(self, target_list: list[str], device: torch.device):
+    def __init__(self,
+                 target_list: list[str],
+                 device: torch.device,
+                 single_class_detection: bool = False):
         super().__init__()
 
         argv = sys.argv
@@ -74,6 +77,12 @@ class GroundingDINOEmbedder(nn.Module):
         self.image_size = nn.Parameter(torch.tensor([[224, 224]]),
                                        requires_grad=False)
 
+        self.single_class_detection = single_class_detection
+        if single_class_detection:
+            self.embed_detection_results = self.embed_single_class_detection_results
+        else:
+            self.embed_detection_results = self.embed_multi_class_detection_results
+
         self.eval()
 
     @property
@@ -86,9 +95,10 @@ class GroundingDINOEmbedder(nn.Module):
             return result
         return result + "."
 
-    def embed_detection_results(self, pred_scores: torch.Tensor,
-                                pred_boxes: torch.Tensor,
-                                pred_features: torch.Tensor) -> torch.Tensor:
+    def embed_single_class_detection_results(self, pred_scores: torch.Tensor,
+                                             pred_boxes: torch.Tensor,
+                                             pred_features: torch.Tensor,
+                                             **kwargs) -> torch.Tensor:
         detection_results = torch.zeros(
             (1, 64, pred_features.shape[-1] + 5),
             dtype=torch.float32,
@@ -99,6 +109,29 @@ class GroundingDINOEmbedder(nn.Module):
         detection_results[:, :pred_features.shape[0],
                           pred_features.shape[-1]] = pred_scores
         detection_results[:, :pred_features.shape[0], -4:] = pred_boxes
+
+        return detection_results
+
+    def embed_multi_class_detection_results(self, pred_scores: torch.Tensor,
+                                            pred_labels: torch.Tensor,
+                                            pred_boxes: torch.Tensor,
+                                            pred_features: torch.Tensor,
+                                            target_class,
+                                            **kwargs) -> torch.Tensor:
+        
+        detection_results = torch.zeros(
+            (1, 64, pred_features.shape[-1] + 7),
+            dtype=torch.float32,
+            device=self.grounding_dino_wrapper.device)
+
+        detection_results[:, :pred_features.shape[0], :pred_features.
+                          shape[-1]] = pred_features
+        detection_results[:, :pred_features.shape[0],
+                          pred_features.shape[-1]] = pred_labels
+        detection_results[:, :pred_features.shape[0],
+                          pred_features.shape[-1]+1] = pred_scores
+        detection_results[:, :pred_features.shape[0], -5:-1] = pred_boxes
+        detection_results[:, :pred_features.shape[0], -1] = target_class
 
         return detection_results
 
@@ -119,16 +152,23 @@ class GroundingDINOEmbedder(nn.Module):
 
             grounding_dino_outputs = torch.stack([
                 self.embed_detection_results(
-                    detection_info['logits'],
-                    # torch.tensor([
-                    #     self.target_list_lower.index(target)
-                    #     for target in detection_info['phrases']
-                    # ],
-                    #              device=self.grounding_dino_wrapper.device),
-                    detection_info['boxes'],
-                    detection_info['features'],
-                    # x['goal_object_type_ind']
-                ) for detection_info in grounding_dino_outputs
+                    **{
+                        'pred_scores':
+                        detection_info['logits'],
+                        'pred_labels':
+                        torch.tensor(
+                            [
+                                self.target_list_lower.index(target)
+                                for target in detection_info['phrases']
+                            ],
+                            device=self.grounding_dino_wrapper.device),
+                        'pred_boxes':
+                        detection_info['boxes'],
+                        'pred_features':
+                        detection_info['features'],
+                        'target_class':
+                        x['goal_object_type_ind']
+                    }) for detection_info in grounding_dino_outputs
             ])
             return grounding_dino_outputs
 
@@ -149,6 +189,7 @@ class GroundingDINOPreprocessor(Preprocessor):
         pool: bool,
         device: Optional[torch.device] = None,
         device_ids: Optional[List[torch.device]] = None,
+        single_class_detection: bool = False,
         **kwargs: Any,
     ):
         self.input_height = input_height
@@ -174,13 +215,17 @@ class GroundingDINOPreprocessor(Preprocessor):
 
         observation_space = gym.spaces.Box(low=low, high=high, shape=shape)
 
+        self.single_class_detection = single_class_detection
+
         super().__init__(**prepare_locals_for_super(locals()))
 
     @property
     def grounding_dino(self) -> GroundingDINOEmbedder:
         if self._grounding_dino is None:
             self._grounding_dino = GroundingDINOEmbedder(
-                target_list=self.target_list, device=self.device)
+                target_list=self.target_list,
+                single_class_detection=self.single_class_detection,
+                device=self.device)
         return self._grounding_dino
 
     def to(self, device: torch.device) -> "GroundingDINOPreprocessor":

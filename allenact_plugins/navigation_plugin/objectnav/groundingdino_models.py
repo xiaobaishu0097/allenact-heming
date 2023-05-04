@@ -108,6 +108,7 @@ class ResnetGroundingDINOTensorGoalEncoder(nn.Module):
             goal_embed_dims: int = 32,
             resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
             combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+            single_class_detection: bool = False,
     ) -> None:
         super().__init__()
         self.goal_uuid = goal_sensor_uuid
@@ -150,13 +151,24 @@ class ResnetGroundingDINOTensorGoalEncoder(nn.Module):
                 nn.ReLU(),
                 nn.Conv2d(*self.combine_hid_out_dims[0:2], 1),
             )
-            self.groundingdino_compressor = nn.Sequential(
-                nn.Linear(261, self.resnet_hid_out_dims[0]),
-                nn.ReLU(),
-                nn.Linear(self.resnet_hid_out_dims[0],
-                          self.resnet_hid_out_dims[0]),
-                nn.ReLU(),
-            )
+
+            if single_class_detection:
+                self.groundingdino_compressor = nn.Sequential(
+                    nn.Linear(261, self.resnet_hid_out_dims[0]),
+                    nn.ReLU(),
+                    nn.Linear(self.resnet_hid_out_dims[0],
+                            self.resnet_hid_out_dims[0]),
+                    nn.ReLU(),
+                )
+            else:
+                self.groundingdino_compressor = nn.Sequential(
+                    nn.Linear(263, self.resnet_hid_out_dims[0]),
+                    nn.ReLU(),
+                    nn.Linear(self.resnet_hid_out_dims[0],
+                            self.resnet_hid_out_dims[0]),
+                    nn.ReLU(),
+                )
+
             self.global_pos_embedding = get_2d_positional_embedding(7, 64)
 
             self.visual_transformer = VisualTransformer(
@@ -222,7 +234,8 @@ class ResnetGroundingDINOTensorGoalEncoder(nn.Module):
             nstep, nsampler = resnet.shape[:2]
 
         observations[self.resnet_uuid] = resnet.view(-1, *resnet.shape[-3:])
-        observations[self.groundingdino_uuid] = einops.rearrange(groundingdino, 'a b d p c -> (a b d) p c')
+        observations[self.groundingdino_uuid] = einops.rearrange(
+            groundingdino, 'a b d p c -> (a b d) p c')
         observations[self.goal_uuid] = goal.view(-1, goal.shape[-1])
 
         return observations, use_agent, nstep, nsampler, nagent
@@ -414,27 +427,28 @@ class ResnetDualGroundingDINOTensorGoalEncoder(nn.Module):
 class ResnetGroundingDINOTensorNavActorCritic(VisualNavActorCritic):
 
     def __init__(
-            # base params
-            self,
-            action_space: gym.spaces.Discrete,
-            observation_space: SpaceDict,
-            goal_sensor_uuid: str,
-            hidden_size=512,
-            num_rnn_layers=1,
-            rnn_type="GRU",
-            add_prev_actions=False,
-            add_prev_action_null_token=False,
-            action_embed_size=6,
-            multiple_beliefs=False,
-            beliefs_fusion: Optional[FusionType] = None,
-            auxiliary_uuids: Optional[List[str]] = None,
-            # custom params
-            rgb_resnet_preprocessor_uuid: Optional[str] = None,
-            rgb_groundingdino_preprocessor_uuid: Optional[str] = None,
-            depth_resnet_preprocessor_uuid: Optional[str] = None,
-            goal_dims: int = 32,
-            resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
-            combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        # base params
+        self,
+        action_space: gym.spaces.Discrete,
+        observation_space: SpaceDict,
+        goal_sensor_uuid: str,
+        hidden_size=512,
+        num_rnn_layers=1,
+        rnn_type="GRU",
+        add_prev_actions=False,
+        add_prev_action_null_token=False,
+        action_embed_size=6,
+        multiple_beliefs=False,
+        beliefs_fusion: Optional[FusionType] = None,
+        auxiliary_uuids: Optional[List[str]] = None,
+        # custom params
+        rgb_resnet_preprocessor_uuid: Optional[str] = None,
+        rgb_groundingdino_preprocessor_uuid: Optional[str] = None,
+        depth_resnet_preprocessor_uuid: Optional[str] = None,
+        goal_dims: int = 32,
+        resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
+        combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        single_class_detection: bool = False,
     ):
         super().__init__(
             action_space=action_space,
@@ -458,7 +472,7 @@ class ResnetGroundingDINOTensorNavActorCritic(VisualNavActorCritic):
                 goal_dims,
                 resnet_compressor_hidden_out_dims,
                 combiner_hidden_out_dims,
-            )
+                single_class_detection=single_class_detection)
         else:
             self.goal_visual_encoder = ResnetDualGroundingDINOTensorGoalEncoder(  # type:ignore
                 self.observation_space,

@@ -66,6 +66,142 @@ class CustomViT(nn.Module):
         return self.vit(x)
 
 
+class ResNetGroundedSAMTensorGoalEncoder(nn.Module):
+
+    def __init__(
+        self,
+        observation_spaces: SpaceDict,
+        goal_sensor_uuid: str,
+        resnet_preprocessor_uuid: str,
+        grounded_sam_preprocessor_uuid: str,
+        goal_embed_dims: int = 32,
+        resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
+        combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        vit_encoder_layers: Optional[int] = None,
+    ) -> None:
+        super().__init__()
+        self.goal_uuid = goal_sensor_uuid
+        self.resnet_uuid = resnet_preprocessor_uuid
+        self.grounded_sam_uuid = grounded_sam_preprocessor_uuid
+        self.goal_embed_dims = goal_embed_dims
+        self.resnet_hid_out_dims = resnet_compressor_hidden_out_dims
+        self.combine_hid_out_dims = combiner_hidden_out_dims
+
+        self.goal_space = observation_spaces.spaces[self.goal_uuid]
+
+        self.blind = self.resnet_uuid not in observation_spaces.spaces and self.grounded_sam_uuid not in observation_spaces.spaces
+        if not self.blind:
+            self.resnet_tensor_shape = observation_spaces.spaces[
+                self.resnet_uuid].shape
+            self.resnet_compressor = nn.Sequential(
+                nn.Conv2d(self.resnet_tensor_shape[0],
+                          self.resnet_hid_out_dims[0], 1),
+                nn.ReLU(),
+                nn.Conv2d(*self.resnet_hid_out_dims[0:2], 1),
+                nn.ReLU(),
+            )
+
+            self.grounded_sam_tensor_shape = observation_spaces.spaces[
+                self.grounded_sam_uuid].shape
+
+            # a VIT encoder to process the (300, 300, 2) binary mask as input and output a feature with (512, 1, 1)
+            self.vit_encoder = CustomViT(encoder_layers=vit_encoder_layers,
+                                         mask_channels=2,
+                                         embed_dim=392)
+
+            self.target_obs_combiner = nn.Sequential(
+                nn.Conv2d(
+                    self.resnet_hid_out_dims[1] + 8,
+                    self.combine_hid_out_dims[0],
+                    1,
+                ),
+                nn.ReLU(),
+                nn.Conv2d(*self.combine_hid_out_dims[0:2], 1),
+            )
+
+    @property
+    def is_blind(self):
+        return self.blind
+
+    @property
+    def output_dims(self):
+        if self.blind:
+            return self.goal_embed_dims
+        else:
+            return (self.combine_hid_out_dims[-1] *
+                    self.grounded_sam_tensor_shape[1] * self.grounded_sam_tensor_shape[2])
+
+    def generate_goal_proposal_masks(self, observations):
+        # TODO: Implement this
+        # return self.resnet_compressor(observations[self.resnet_uuid])
+        raise NotImplementedError
+
+    def compress_resnet(self, observations):
+        return self.resnet_compressor(observations[self.resnet_uuid])
+
+    def distribute_target(self, observations):
+        target_emb = self.embed_goal(observations[self.goal_uuid])
+        return target_emb.view(-1, self.goal_embed_dims, 1,
+                               1).expand(-1, -1,
+                                         self.grounded_sam_tensor_shape[-2],
+                                         self.grounded_sam_tensor_shape[-1])
+
+    def process_proposal_mask(self, observations: dict) -> torch.Tensor:
+        raise NotImplementedError
+
+    def adapt_input(self, observations):
+        resnet = observations[self.resnet_uuid]
+        semantic_mask = observations[self.grounded_sam_uuid]
+        goal = observations[self.goal_uuid]
+
+        use_agent = False
+        nagent = 1
+
+        if len(semantic_mask.shape) == 6:
+            use_agent = True
+            nstep, nsampler, nagent = semantic_mask.shape[:3]
+        else:
+            nstep, nsampler = semantic_mask.shape[:2]
+
+        observations[self.resnet_uuid] = resnet.view(-1, *resnet.shape[-3:])
+        observations[self.grounded_sam_uuid] = semantic_mask.view(
+            -1, *semantic_mask.shape[-3:])
+        observations[self.goal_uuid] = goal.view(-1, goal.shape[-1])
+
+        return observations, use_agent, nstep, nsampler, nagent
+
+    @staticmethod
+    def adapt_output(x, use_agent, nstep, nsampler, nagent):
+        if use_agent:
+            return x.view(nstep, nsampler, nagent, -1)
+        return x.view(nstep, nsampler * nagent, -1)
+
+    def forward(self, observations):
+        observations, use_agent, nstep, nsampler, nagent = self.adapt_input(
+            observations)
+
+        if self.blind:
+            return self.embed_goal(observations[self.goal_uuid])
+
+        embeds = self.vit_encoder(observations[self.grounded_sam_uuid].to(
+            torch.float32))
+
+        x = self.target_obs_combiner(
+            torch.cat((self.compress_resnet(observations),
+                       einops.rearrange(
+                           embeds, 'b (n h w) -> b n h w', n=8, h=7, w=7)),
+                      dim=1))
+        # embeds = einops.rearrange(embeds, 'b c -> b 1 c')
+
+        # resnet_features = self.compress_resnet(observations)
+        # resnet_features = einops.rearrange(resnet_features + self.global_pos_embedding.to(resnet_features.device), 'b c h w -> b c (h w)')
+        # embs, _ = self.visual_transformer(self.compress_detr(observations), resnet_features)
+        # x = self.target_obs_combiner(einops.rearrange(embs, 'b (h w) c -> b c h w', h=7, w=7))
+        # x = x.reshape(x.size(0), -1)  # flatten
+
+        return self.adapt_output(x, use_agent, nstep, nsampler, nagent)
+
+
 class GroundedSAMTensorGoalEncoder(nn.Module):
 
     def __init__(
@@ -331,27 +467,29 @@ class ResnetDualGroundedSAMTensorGoalEncoder(nn.Module):
 class GroundedSAMTensorNavActorCritic(VisualNavActorCritic):
 
     def __init__(
-            # base params
-            self,
-            action_space: gym.spaces.Discrete,
-            observation_space: SpaceDict,
-            goal_sensor_uuid: str,
-            hidden_size=512,
-            num_rnn_layers=1,
-            rnn_type="GRU",
-            add_prev_actions=False,
-            add_prev_action_null_token=False,
-            action_embed_size=6,
-            multiple_beliefs=False,
-            beliefs_fusion: Optional[FusionType] = None,
-            auxiliary_uuids: Optional[List[str]] = None,
-            # custom params
-            rgb_grounded_sam_preprocessor_uuid: Optional[str] = None,
-            depth_grounded_sam_preprocessor_uuid: Optional[str] = None,
-            goal_dims: int = 32,
-            resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
-            combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
-            vit_encoder_layers: Optional[int] = None,
+        # base params
+        self,
+        action_space: gym.spaces.Discrete,
+        observation_space: SpaceDict,
+        goal_sensor_uuid: str,
+        hidden_size=512,
+        num_rnn_layers=1,
+        rnn_type="GRU",
+        add_prev_actions=False,
+        add_prev_action_null_token=False,
+        action_embed_size=6,
+        multiple_beliefs=False,
+        beliefs_fusion: Optional[FusionType] = None,
+        auxiliary_uuids: Optional[List[str]] = None,
+        # custom params
+        rgb_resnet_preprocessor_uuid: Optional[str] = None,
+        depth_resnet_preprocessor_uuid: Optional[str] = None,
+        rgb_grounded_sam_preprocessor_uuid: Optional[str] = None,
+        depth_grounded_sam_preprocessor_uuid: Optional[str] = None,
+        goal_dims: int = 32,
+        resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
+        combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        vit_encoder_layers: Optional[int] = None,
     ):
         super().__init__(
             action_space=action_space,
@@ -363,7 +501,8 @@ class GroundedSAMTensorNavActorCritic(VisualNavActorCritic):
         )
 
         if (rgb_grounded_sam_preprocessor_uuid is None
-                or depth_grounded_sam_preprocessor_uuid is None):
+                or depth_grounded_sam_preprocessor_uuid is None
+            ) and rgb_resnet_preprocessor_uuid is None:
             grounded_sam_preprocessor_uuid = (
                 rgb_grounded_sam_preprocessor_uuid
                 if rgb_grounded_sam_preprocessor_uuid is not None else
@@ -371,6 +510,26 @@ class GroundedSAMTensorNavActorCritic(VisualNavActorCritic):
             self.goal_visual_encoder = GroundedSAMTensorGoalEncoder(
                 self.observation_space,
                 goal_sensor_uuid,
+                grounded_sam_preprocessor_uuid,
+                goal_dims,
+                resnet_compressor_hidden_out_dims,
+                combiner_hidden_out_dims,
+                vit_encoder_layers=vit_encoder_layers,
+            )
+        elif (rgb_resnet_preprocessor_uuid is not None
+              and rgb_grounded_sam_preprocessor_uuid
+              is not None) and depth_grounded_sam_preprocessor_uuid is None:
+            resnet_preprocessor_uuid = (
+                rgb_resnet_preprocessor_uuid if rgb_resnet_preprocessor_uuid
+                is not None else depth_resnet_preprocessor_uuid)
+            grounded_sam_preprocessor_uuid = (
+                rgb_grounded_sam_preprocessor_uuid
+                if rgb_grounded_sam_preprocessor_uuid is not None else
+                depth_grounded_sam_preprocessor_uuid)
+            self.goal_visual_encoder = ResNetGroundedSAMTensorGoalEncoder(
+                self.observation_space,
+                goal_sensor_uuid,
+                resnet_preprocessor_uuid,
                 grounded_sam_preprocessor_uuid,
                 goal_dims,
                 resnet_compressor_hidden_out_dims,

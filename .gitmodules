@@ -4,7 +4,10 @@
 	branch = active_neural_slam
 [submodule "submodules/detr"]
 	path = submodules/detr
-	url = git@github.com:xiaobaishu0097/detr-heming.git
+	url = https://github.com/xiaobaishu0097/detr-heming.git
 [submodule "submodules/grounded_sam"]
 	path = submodules/grounded_sam
-	url = git@github.com:xiaobaishu0097/Grounded-Segment-Anything-heming.git
+	url = https://github.com/xiaobaishu0097/Grounded-Segment-Anything-heming.git
+[submodule "submodules/toolbox"]
+	path = submodules/toolbox
+	url = https://github.com/xiaobaishu0097/ToolBox.git

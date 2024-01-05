@@ -79,7 +79,7 @@ try:
 except ImportError:
     DEBUGGING = str2bool(os.getenv("ALLENACT_DEBUG", "false"))
 
-DEBUG_VST_TIMEOUT: Optional[int] = (lambda x: int(x) if x is not None else x)(
+DEBUG_VST_TIMEOUT: int = (lambda x: int(x) if x is not None else 100)(
     os.getenv("ALLENACT_DEBUG_VST_TIMEOUT", None)
 )
 

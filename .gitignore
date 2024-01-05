@@ -200,3 +200,7 @@ src
 *.allenact_start_time_string.lock
 *.lock
 rsync-*
+
+storage/
+
+*.pth

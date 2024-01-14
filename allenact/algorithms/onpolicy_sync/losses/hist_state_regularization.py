@@ -100,7 +100,9 @@ class HbSR(AbstractActorCriticLoss):
                         episode_start_id = end_idx[i_end - 1] + 1
                         episode_end_id = end_idx[i_end] + 1
 
-                if end_idx[i_end] == 0 or episode_end_id - episode_start_id < 3:
+                if len(end_idx) > 0 and (
+                    end_idx[i_end] == 0 or episode_end_id - episode_start_id < 3
+                ):
                     continue
 
                 sampler_episode_memories = einops.rearrange(

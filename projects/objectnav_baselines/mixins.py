@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import LambdaLR
 from torchvision import models
 
-from allenact.algorithms.onpolicy_sync.losses import PPO, Imitation
+from allenact.algorithms.onpolicy_sync.losses import PPO, Imitation, HbSR
 from allenact.algorithms.onpolicy_sync.losses.abstract_loss import (
     AbstractActorCriticLoss,
 )
@@ -444,6 +444,70 @@ class ObjectNavILMixin:
                         endp=1.0,
                         steps=tf_steps,
                     ),
+                )
+            ],
+            lr_scheduler_builder=Builder(
+                LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)}
+            )
+            if anneal_lr
+            else None,
+        )
+
+
+class ObjectNavPPOHbSRMixin:
+    @staticmethod
+    def training_pipeline(
+        auxiliary_uuids: Sequence[str],
+        multiple_beliefs: bool,
+        normalize_advantage: bool = True,
+        advance_scene_rollout_period: Optional[int] = None,
+        lr=3e-4,
+        num_mini_batch=1,
+        update_repeats=4,
+        num_steps=128,
+        save_interval=5000000,
+        log_interval=10000 if torch.cuda.is_available() else 1,
+        gamma=0.99,
+        use_gae=True,
+        gae_lambda=0.95,
+        max_grad_norm=0.5,
+        anneal_lr: bool = True,
+        extra_losses: Optional[Dict[str, Tuple[AbstractActorCriticLoss, float]]] = None,
+    ) -> TrainingPipeline:
+        ppo_steps = int(300000000)
+
+        named_losses = {
+            "ppo_loss": (
+                PPO(**PPOConfig, normalize_advantage=normalize_advantage),
+                1.0,
+            ),
+            "hsbr_loss": (HbSR(), 1.0),
+            **({} if extra_losses is None else extra_losses),
+        }
+        named_losses = update_with_auxiliary_losses(
+            named_losses=named_losses,
+            auxiliary_uuids=auxiliary_uuids,
+            multiple_beliefs=multiple_beliefs,
+        )
+
+        return TrainingPipeline(
+            save_interval=save_interval,
+            metric_accumulate_interval=log_interval,
+            optimizer_builder=Builder(optim.Adam, dict(lr=lr)),
+            num_mini_batch=num_mini_batch,
+            update_repeats=update_repeats,
+            max_grad_norm=max_grad_norm,
+            num_steps=num_steps,
+            named_losses={key: val[0] for key, val in named_losses.items()},
+            gamma=gamma,
+            use_gae=use_gae,
+            gae_lambda=gae_lambda,
+            advance_scene_rollout_period=advance_scene_rollout_period,
+            pipeline_stages=[
+                PipelineStage(
+                    loss_names=list(named_losses.keys()),
+                    max_stage_steps=ppo_steps,
+                    loss_weights=[val[1] for val in named_losses.values()],
                 )
             ],
             lr_scheduler_builder=Builder(

@@ -15,12 +15,12 @@ from projects.objectnav_baselines.experiments.ithor.objectnav_ithor_base import 
 )
 from projects.objectnav_baselines.mixins import (
     ResNetPreprocessGRUActorCriticMixin,
-    ObjectNavILMixin,
+    ObjectNavPPOHbSRMixin,
 )
-from allenact_plugins.robothor_plugin.robothor_tasks import ObjectNavTask
+from allenact_plugins.robothor_plugin.robothor_tasks import PointNavTask
 
 
-class ObjectNaviThorRGBImitationLearningExperimentConfig(ObjectNaviThorBaseConfig):
+class ObjectNaviThorRGBPPOHbSRExperimentConfig(ObjectNaviThorBaseConfig):
     """An Object Navigation experiment configuration in iThor with RGB
     input."""
 
@@ -33,10 +33,6 @@ class ObjectNaviThorRGBImitationLearningExperimentConfig(ObjectNaviThorBaseConfi
         ),
         GoalObjectTypeThorSensor(
             object_types=ObjectNaviThorBaseConfig.TARGET_TYPES,
-        ),
-        ExpertActionSensor(
-            action_space=gym.spaces.Discrete(len(ObjectNavTask.class_action_names())),
-            uuid="expert_action",
         ),
     ]
 
@@ -51,7 +47,7 @@ class ObjectNaviThorRGBImitationLearningExperimentConfig(ObjectNaviThorBaseConfi
         )
 
     def training_pipeline(self, **kwargs) -> TrainingPipeline:
-        return ObjectNavILMixin.training_pipeline(
+        return ObjectNavPPOHbSRMixin.training_pipeline(
             auxiliary_uuids=[],
             multiple_beliefs=False,
             advance_scene_rollout_period=self.ADVANCE_SCENE_ROLLOUT_PERIOD,
@@ -67,4 +63,4 @@ class ObjectNaviThorRGBImitationLearningExperimentConfig(ObjectNaviThorBaseConfi
 
     @classmethod
     def tag(cls):
-        return "ObjectNav-iTHOR-RGB-ResNet18GRU-ImitationLearning"
+        return "ObjectNav-iTHOR-RGB-ResNet18GRU-DDPPO-HbSR"

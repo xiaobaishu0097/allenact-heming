@@ -121,7 +121,8 @@ class StreamingStorageMixin(abc.ABC):
 class MiniBatchStorageMixin(abc.ABC):
     @abc.abstractmethod
     def batched_experience_generator(
-        self, num_mini_batch: int,
+        self,
+        num_mini_batch: int,
     ) -> Generator[Dict[str, Any], None, None]:
         raise NotImplementedError
 
@@ -149,6 +150,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         self.action_space: Optional[gym.Space] = None
         self.memory_first_last: Optional[Memory] = None
         self._observations_full: Memory = Memory()
+        self._memories_full: Memory = Memory()
 
         self._value_preds_full: Optional[torch.Tensor] = None
         self._returns_full: Optional[torch.Tensor] = None
@@ -183,7 +185,13 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             self.action_space = action_space
 
             self.memory_first_last: Memory = self.create_memory(
-                spec=self.memory_specification, num_samplers=num_samplers,
+                spec=self.memory_specification,
+                num_samplers=num_samplers,
+            ).to(self.device)
+            self._memories_full: Memory = self.create_memory_full(
+                spec=self.memory_specification,
+                num_samplers=num_samplers,
+                full_size=self.full_size,
             ).to(self.device)
             for key in self.memory_specification:
                 self.flattened_to_unflattened["memory"][key] = [key]
@@ -248,8 +256,15 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
     def observations(self) -> Memory:
         return self._observations_full.slice(dim=0, start=0, stop=self.step + 1)
 
+    @property
+    def memories(self) -> torch.Tensor:
+        return self._memories_full["single_belief"][0][: self.step, ...]
+
     @staticmethod
-    def create_memory(spec: Optional[FullMemorySpecType], num_samplers: int,) -> Memory:
+    def create_memory(
+        spec: Optional[FullMemorySpecType],
+        num_samplers: int,
+    ) -> Memory:
         if spec is None:
             return Memory()
 
@@ -261,6 +276,33 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             sampler_dim = dim_names.index("sampler")
 
             all_dims = [2] + [d[1] for d in dims_template]
+            all_dims[sampler_dim] = num_samplers
+
+            memory.check_append(
+                key=key,
+                tensor=torch.zeros(*all_dims, dtype=dtype),
+                sampler_dim=sampler_dim,
+            )
+
+        return memory
+
+    @staticmethod
+    def create_memory_full(
+        spec: Optional[FullMemorySpecType],
+        num_samplers: int,
+        full_size: int,
+    ) -> Memory:
+        if spec is None:
+            return Memory()
+
+        memory = Memory()
+        for key in spec:
+            dims_template, dtype = spec[key]
+
+            dim_names = ["step"] + [d[0] for d in dims_template]
+            sampler_dim = dim_names.index("sampler")
+
+            all_dims = [200] + [d[1] for d in dims_template]
             all_dims[sampler_dim] = num_samplers
 
             memory.check_append(
@@ -290,7 +332,9 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         self.device = device
 
     def insert_observations(
-        self, observations: ObservationType, time_step: int,
+        self,
+        observations: ObservationType,
+        time_step: int,
     ):
         self.insert_tensors(
             storage=self._observations_full,
@@ -300,21 +344,31 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
         )
 
     def insert_memory(
-        self, memory: Optional[Memory], time_step: int,
+        self,
+        memory: Optional[Memory],
+        time_step: int,
     ):
         if memory is None:
             assert len(self.memory_first_last) == 0
+            assert len(self._memories_full) == 0
             return
 
         # `min(time_step, 1)` as we only store the first and last memories:
         #  * first memory is used for loss computation when the agent model has to compute
         #    all its outputs again given the full batch.
-        #  * last memory ised used by the agent when collecting rollouts
+        #  * last memory is used by the agent when collecting rollouts
         self.insert_tensors(
             storage=self.memory_first_last,
             storage_name="memory",
             unflattened=memory,
             time_step=min(time_step, 1),
+        )
+
+        self.insert_tensors(
+            storage=self._memories_full,
+            storage_name="memories",
+            unflattened=memory,
+            time_step=max(time_step - 1, 0),
         )
 
     def insert_tensors(
@@ -379,6 +433,10 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
                     )
                 elif storage_name == "memory":
                     # current_data does not have a step dimension
+                    storage[flatten_name][0][time_step].copy_(current_data)
+                elif storage_name == "memories":
+                    # current_data has a step dimension
+                    assert time_step >= 0
                     storage[flatten_name][0][time_step].copy_(current_data)
                 else:
                     raise NotImplementedError
@@ -497,6 +555,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
 
         self._observations_full = self._observations_full.sampler_select(keep_list)
         self.memory_first_last = self.memory_first_last.sampler_select(keep_list)
+        self._memories_full = self._memories_full[:, keep_list]
         self._actions_full = self._actions_full[:, keep_list]
         self._prev_actions_full = self._prev_actions_full[:, keep_list]
         self._action_log_probs_full = self._action_log_probs_full[:, keep_list]
@@ -519,7 +578,10 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
     ):
         assert len(kwargs) == 0
         self.compute_returns(
-            next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau,
+            next_value=next_value,
+            use_gae=use_gae,
+            gamma=gamma,
+            tau=tau,
         )
 
         self._advantages = self.returns[:-1] - self.value_preds[:-1]
@@ -587,7 +649,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
                 )
 
     def batched_experience_generator(
-        self, num_mini_batch: int,
+        self,
+        num_mini_batch: int,
     ):
         assert self._before_update_called, (
             "self._before_update_called() must be called before"
@@ -625,6 +688,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             adv_targ = []
             norm_adv_targ = []
 
+            memories_batch = []
+
             for ind in cur_samplers:
                 actions_batch.append(self.actions[:, ind])
                 prev_actions_batch.append(self.prev_actions[:-1, ind])
@@ -635,6 +700,8 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
 
                 adv_targ.append(self._advantages[:, ind])
                 norm_adv_targ.append(self._normalized_advantages[:, ind])
+
+                memories_batch.append(self.memories[:, :, ind, ...])
 
             actions_batch = torch.stack(actions_batch, 1)  # type:ignore
             prev_actions_batch = torch.stack(prev_actions_batch, 1)  # type:ignore
@@ -647,9 +714,12 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
             adv_targ = torch.stack(adv_targ, 1)  # type:ignore
             norm_adv_targ = torch.stack(norm_adv_targ, 1)  # type:ignore
 
+            memories_batch = torch.stack(memories_batch, 1)  # type:ignore
+
             yield {
                 "observations": observations_batch,
                 "memory": memory_batch,
+                "memories": memories_batch,
                 "actions": su.unflatten(self.action_space, actions_batch),
                 "prev_actions": su.unflatten(self.action_space, prev_actions_batch),
                 "values": value_preds_batch,

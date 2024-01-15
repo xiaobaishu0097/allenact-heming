@@ -555,7 +555,7 @@ class RolloutBlockStorage(RolloutStorage, MiniBatchStorageMixin):
 
         self._observations_full = self._observations_full.sampler_select(keep_list)
         self.memory_first_last = self.memory_first_last.sampler_select(keep_list)
-        self._memories_full = self._memories_full[:, keep_list]
+        self._memories_full = self._memories_full.sampler_select(keep_list)
         self._actions_full = self._actions_full[:, keep_list]
         self._prev_actions_full = self._prev_actions_full[:, keep_list]
         self._action_log_probs_full = self._action_log_probs_full[:, keep_list]

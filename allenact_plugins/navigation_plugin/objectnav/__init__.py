@@ -1,0 +1,2 @@
+from .detr_models import ResnetDETRTensorNavActorCritic
+from .models import ResnetTensorNavActorCritic, ObjectNavActorCritic

@@ -473,6 +473,7 @@ class ObjectNavPPOHbSRMixin:
         max_grad_norm=0.5,
         anneal_lr: bool = True,
         extra_losses: Optional[Dict[str, Tuple[AbstractActorCriticLoss, float]]] = None,
+        end_action_id: int = 5,
     ) -> TrainingPipeline:
         ppo_steps = int(300000000)
 
@@ -481,7 +482,7 @@ class ObjectNavPPOHbSRMixin:
                 PPO(**PPOConfig, normalize_advantage=normalize_advantage),
                 1.0,
             ),
-            "hsbr_loss": (HbSR(), 1.0),
+            "hsbr_loss": (HbSR(end_action_id=end_action_id), 1.0),
             **({} if extra_losses is None else extra_losses),
         }
         named_losses = update_with_auxiliary_losses(

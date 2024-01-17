@@ -17,7 +17,7 @@ from projects.objectnav_baselines.mixins import (
     ResNetPreprocessGRUActorCriticMixin,
     ObjectNavPPOHbSRMixin,
 )
-from allenact_plugins.robothor_plugin.robothor_tasks import PointNavTask
+from allenact_plugins.ithor_plugin.ithor_tasks import ObjectNaviThorGridTask
 
 
 class ObjectNaviThorRGBPPOHbSRExperimentConfig(ObjectNaviThorBaseConfig):
@@ -51,6 +51,7 @@ class ObjectNaviThorRGBPPOHbSRExperimentConfig(ObjectNaviThorBaseConfig):
             auxiliary_uuids=[],
             multiple_beliefs=False,
             advance_scene_rollout_period=self.ADVANCE_SCENE_ROLLOUT_PERIOD,
+            end_action_id=5,
         )
 
     def preprocessors(self) -> Sequence[Union[Preprocessor, Builder[Preprocessor]]]:

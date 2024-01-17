@@ -24,7 +24,7 @@ from allenact.base_abstractions.sensor import AbstractExpertSensor
 class HbSR(AbstractActorCriticLoss):
     """History-based State Regularization."""
 
-    def __init__(self, end_action_id: int = 3, *args, **kwargs):
+    def __init__(self, end_action_id: int = 5, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.end_action_id = end_action_id

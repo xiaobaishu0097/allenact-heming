@@ -17,7 +17,7 @@ from projects.objectnav_baselines.mixins import (
     ResNetPreprocessGRUActorCriticMixin,
     ObjectNavILMixin,
 )
-from allenact_plugins.robothor_plugin.robothor_tasks import ObjectNavTask
+from allenact_plugins.ithor_plugin.ithor_tasks import ObjectNaviThorGridTask
 
 
 class ObjectNaviThorRGBImitationLearningExperimentConfig(ObjectNaviThorBaseConfig):
@@ -35,7 +35,9 @@ class ObjectNaviThorRGBImitationLearningExperimentConfig(ObjectNaviThorBaseConfi
             object_types=ObjectNaviThorBaseConfig.TARGET_TYPES,
         ),
         ExpertActionSensor(
-            action_space=gym.spaces.Discrete(len(ObjectNavTask.class_action_names())),
+            action_space=gym.spaces.Discrete(
+                len(ObjectNaviThorGridTask.class_action_names())
+            ),
             uuid="expert_action",
         ),
     ]

@@ -60,4 +60,4 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
 
     @classmethod
     def tag(cls):
-        return "ObjectNav-iTHOR-RGB-ResNet18GRU-DDPPO"
+        return "ObjectNav-iTHOR-RGB-ResNet18DETRGRU-DDPPO"

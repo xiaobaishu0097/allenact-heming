@@ -1,6 +1,9 @@
 from abc import ABC
 from typing import Optional, Sequence, Union
 
+import os
+import yaml
+
 from allenact.base_abstractions.experiment_config import ExperimentConfig
 from allenact.base_abstractions.preprocessor import Preprocessor
 from allenact.base_abstractions.sensor import Sensor
@@ -24,7 +27,15 @@ class ObjectNavBaseConfig(ExperimentConfig, ABC):
     ADVANCE_SCENE_ROLLOUT_PERIOD: Optional[int] = None
     SENSORS: Sequence[Sensor] = []
 
-    def __init__(self):
+    def __init__(self, agent_config: Optional[str] = None):
+        if agent_config is not None and os.path.exists(agent_config):
+            with open(agent_config, "r") as file:
+                loaded_settings = yaml.safe_load(file)
+
+            for key, value in loaded_settings.items():
+                if hasattr(self, key) and getattr(self, key) != value:
+                    setattr(self, key, value)
+
         self.REWARD_CONFIG = {
             "step_penalty": -0.01,
             "goal_success_reward": 10.0,

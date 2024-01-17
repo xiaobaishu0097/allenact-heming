@@ -73,8 +73,9 @@ class ObjectNavThorBaseConfig(ObjectNavBaseConfig, ABC):
         test_gpu_ids: Optional[Sequence[int]] = None,
         randomize_train_materials: bool = False,
         headless: bool = False,
+        **kwargs: Any,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
 
         def v_or_default(v, default):
             return v if v is not None else default

@@ -30,14 +30,18 @@ class RoboThorEnvironment:
 
     def __init__(self, all_metadata_available: bool = True, **kwargs):
         self.config = dict(
-            rotateStepDegrees=30.0,
-            visibilityDistance=1.0,
-            gridSize=0.25,
+            rotateStepDegrees=30.0
+            if "rotateStepDegrees" not in kwargs
+            else float(kwargs["rotateStepDegrees"]),
+            visibilityDistance=1.0
+            if "visibilityDistance" not in kwargs
+            else float(kwargs["visibilityDistance"]),
+            gridSize=0.25 if "gridSize" not in kwargs else float(kwargs["gridSize"]),
             continuousMode=True,
             snapToGrid=False,
             agentMode="locobot",
-            width=640,
-            height=480,
+            width=640 if "width" not in kwargs else kwargs["width"],
+            height=480 if "height" not in kwargs else kwargs["height"],
             agentCount=1,
             server_class=FifoServer,
         )
@@ -53,7 +57,9 @@ class RoboThorEnvironment:
             )
 
         recursive_update(self.config, kwargs)
-        self.controller = Controller(**self.config,)
+        self.controller = Controller(
+            **self.config,
+        )
 
         self.all_metadata_available = all_metadata_available
 

@@ -43,6 +43,13 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
             goal_sensor_type=GoalObjectTypeThorSensor,
         )
 
+        self.n_encoder_layers: int = (
+            int(kwargs["n_encoder_layers"]) if "n_encoder_layers" in kwargs else 1
+        )
+        self.n_decoder_layers: int = (
+            int(kwargs["n_encoder_layers"]) if "n_decoder_layers" in kwargs else 1
+        )
+
     def training_pipeline(self, **kwargs) -> TrainingPipeline:
         return ObjectNavPPOMixin.training_pipeline(
             auxiliary_uuids=[],
@@ -55,7 +62,10 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
 
     def create_model(self, **kwargs) -> nn.Module:
         return self.preprocessing_and_model.create_model(
-            num_actions=self.ACTION_SPACE.n, **kwargs
+            num_actions=self.ACTION_SPACE.n,
+            n_encoder_layers=self.n_encoder_layers,
+            n_decoder_layers=self.n_decoder_layers,
+            **kwargs
         )
 
     @classmethod

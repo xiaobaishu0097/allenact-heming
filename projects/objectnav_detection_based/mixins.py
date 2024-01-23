@@ -112,6 +112,7 @@ class ResNetDETRPreprocessGRUActorCriticMixin:
             else None,
             hidden_size=512,
             goal_dims=32,
+            **kwargs,
         )
 
 

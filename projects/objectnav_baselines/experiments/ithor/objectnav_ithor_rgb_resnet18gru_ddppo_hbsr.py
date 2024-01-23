@@ -51,7 +51,7 @@ class ObjectNaviThorRGBPPOHbSRExperimentConfig(ObjectNaviThorBaseConfig):
             auxiliary_uuids=[],
             multiple_beliefs=False,
             advance_scene_rollout_period=self.ADVANCE_SCENE_ROLLOUT_PERIOD,
-            end_action_id=5,
+            end_action_id=3,
         )
 
     def preprocessors(self) -> Sequence[Union[Preprocessor, Builder[Preprocessor]]]:

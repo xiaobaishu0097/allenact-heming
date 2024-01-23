@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, cast, Tuple, Sequence
+from typing import Any, Optional, List, Dict, cast, Tuple, Sequence
 
 import einops
 import gym
@@ -113,8 +113,11 @@ class ResnetDETRTensorGoalEncoder(nn.Module):
         resnet_preprocessor_uuid: str,
         detr_preprocessor_uuid: str,
         goal_embed_dims: int = 32,
+        num_encoder_layers: int = 2,
+        num_decoder_layers: int = 2,
         resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
         combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        **kwargs: Any,
     ) -> None:
         super().__init__()
         self.goal_uuid = goal_sensor_uuid
@@ -164,8 +167,8 @@ class ResnetDETRTensorGoalEncoder(nn.Module):
             self.visual_transformer = VisualTransformer(
                 d_model=128,
                 nhead=4,
-                num_encoder_layers=2,
-                num_decoder_layers=2,
+                num_encoder_layers=num_encoder_layers,
+                num_decoder_layers=num_decoder_layers,
                 dim_feedforward=128,
             )
 
@@ -459,6 +462,9 @@ class ResnetDETRTensorNavActorCritic(VisualNavActorCritic):
         goal_dims: int = 32,
         resnet_compressor_hidden_out_dims: Tuple[int, int] = (128, 32),
         combiner_hidden_out_dims: Tuple[int, int] = (128, 32),
+        n_encoder_layers: int = 1,
+        n_decoder_layers: int = 1,
+        **kwargs: Any,
     ):
         super().__init__(
             action_space=action_space,
@@ -484,6 +490,8 @@ class ResnetDETRTensorNavActorCritic(VisualNavActorCritic):
                 resnet_preprocessor_uuid,
                 rgb_detr_preprocessor_uuid,
                 goal_dims,
+                n_encoder_layers,
+                n_decoder_layers,
                 resnet_compressor_hidden_out_dims,
                 combiner_hidden_out_dims,
             )

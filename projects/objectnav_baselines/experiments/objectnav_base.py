@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 import os
 import yaml
@@ -27,7 +27,7 @@ class ObjectNavBaseConfig(ExperimentConfig, ABC):
     ADVANCE_SCENE_ROLLOUT_PERIOD: Optional[int] = None
     SENSORS: Sequence[Sensor] = []
 
-    def __init__(self, agent_config: Optional[str] = None):
+    def __init__(self, agent_config: Optional[str] = None, **kwargs: Any):
         if agent_config is not None and os.path.exists(agent_config):
             with open(agent_config, "r") as file:
                 loaded_settings = yaml.safe_load(file)

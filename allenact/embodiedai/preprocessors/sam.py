@@ -267,7 +267,7 @@ class SAMPreprocessor(Preprocessor):
 
         observation_space = gym.spaces.Box(low=low, high=high, shape=shape)
 
-        targets_features_path = "/home/hemingdu/Code/allenact-heming/datasets/ithor-classagnostic/training_target_features/vit_b_mask_decoder_features.pt"
+        targets_features_path = "./datasets/ithor-classagnostic/training_target_features/vit_b_mask_decoder_features.pt"
         self.targets_features = torch.load(targets_features_path)
 
         super().__init__(**prepare_locals_for_super(locals()))

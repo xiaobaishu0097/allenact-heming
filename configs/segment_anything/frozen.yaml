@@ -1,0 +1,13 @@
+checkpoint:
+  # model_type: vit_b
+  # path: "./storage/model_zoo/sam/sam_vit_b_01ec64.pth"
+  model_type: vit_b
+  path: "./storage/model_zoo/sam/sam_vit_b_01ec64.pth"
+
+model:
+  points_per_side: 16
+  points_per_batch: 32
+
+fine_tune:
+  image_encoder: False
+  mask_decoder: False

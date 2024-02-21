@@ -41,12 +41,61 @@ class RGBSensorThor(RGBSensor[THOR_ENV_TYPE, THOR_TASK_TYPE]):
     """
 
     def frame_from_env(
-        self, env: THOR_ENV_TYPE, task: Optional[THOR_TASK_TYPE],
+        self,
+        env: THOR_ENV_TYPE,
+        task: Optional[THOR_TASK_TYPE],
     ) -> np.ndarray:  # type:ignore
         if isinstance(env, ai2thor.controller.Controller):
             return env.last_event.frame.copy()
         else:
             return env.current_frame.copy()
+
+
+class RGBUINT8SensorThor(RGBSensor[THOR_ENV_TYPE, THOR_TASK_TYPE]):
+    """Sensor for RGB images in THOR.
+
+    Returns from a running IThorEnvironment instance, the current RGB
+    frame corresponding to the agent's egocentric view.
+    """
+
+    def frame_from_env(
+        self,
+        env: THOR_ENV_TYPE,
+        task: Optional[THOR_TASK_TYPE],
+    ) -> np.ndarray:  # type:ignore
+        if isinstance(env, ai2thor.controller.Controller):
+            return env.last_event.frame.copy()
+        else:
+            return env.current_frame.copy()
+
+    def process_img(self, img: np.ndarray):
+        assert (
+            np.issubdtype(img.dtype, np.float32)
+            and (len(img.shape) == 2 or img.shape[-1] == 1)
+        ) or (img.shape[-1] == 3 and np.issubdtype(img.dtype, np.uint8)), (
+            "Input frame must either have 3 channels and be of"
+            " type np.uint8 or have one channel and be of type np.float32"
+        )
+
+        if (
+            self._scale_first
+            and self.scaler is not None
+            and img.shape[:2] != (self._height, self._width)
+        ):
+            img = np.array(self.scaler(self.to_pil(img)), dtype=img.dtype)  # hwc
+        elif np.issubdtype(img.dtype, np.float32):
+            img = img.copy()
+
+        assert img.dtype in [np.uint8, np.float32]
+
+        if (
+            (not self._scale_first)
+            and self.scaler is not None
+            and img.shape[:2] != (self._height, self._width)
+        ):
+            img = np.array(self.scaler(self.to_pil(img)), dtype=np.float32)  # hwc
+
+        return img
 
 
 class GoalObjectTypeThorSensor(Sensor):
@@ -248,7 +297,8 @@ class ReachableBoundsTHORSensor(Sensor[RoboThorEnvironment, Task[RoboThorEnviron
 
     @staticmethod
     def get_bounds(
-        controller: ai2thor.controller.Controller, margin: float,
+        controller: ai2thor.controller.Controller,
+        margin: float,
     ) -> Dict[str, np.ndarray]:
         positions = controller.step("GetReachablePositions").metadata["actionReturn"]
         min_x = min(p["x"] for p in positions)
@@ -482,7 +532,10 @@ class SemanticMapTHORSensor(Sensor[RoboThorEnvironment, Task[RoboThorEnvironment
 
         def get_map_space(nchannels: int, size: int):
             return gym.spaces.Box(
-                low=0, high=1, shape=(size, size, nchannels), dtype=np.bool_,
+                low=0,
+                high=1,
+                shape=(size, size, nchannels),
+                dtype=np.bool_,
             )
 
         n = len(self.ordered_object_types)
@@ -490,12 +543,24 @@ class SemanticMapTHORSensor(Sensor[RoboThorEnvironment, Task[RoboThorEnvironment
         big = self.semantic_map_builder.ground_truth_semantic_map.shape[0]
 
         space_dict = {
-            "egocentric_update": get_map_space(nchannels=n, size=small,),
-            "egocentric_mask": get_map_space(nchannels=1, size=small,),
+            "egocentric_update": get_map_space(
+                nchannels=n,
+                size=small,
+            ),
+            "egocentric_mask": get_map_space(
+                nchannels=1,
+                size=small,
+            ),
         }
         if not ego_only:
-            space_dict["explored_mask"] = get_map_space(nchannels=1, size=big,)
-            space_dict["map"] = get_map_space(nchannels=n, size=big,)
+            space_dict["explored_mask"] = get_map_space(
+                nchannels=1,
+                size=big,
+            )
+            space_dict["map"] = get_map_space(
+                nchannels=n,
+                size=big,
+            )
 
         observation_space = gym.spaces.Dict(space_dict)
         super().__init__(**prepare_locals_for_super(locals()))

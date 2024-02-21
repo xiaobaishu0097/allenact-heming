@@ -204,3 +204,5 @@ rsync-*
 storage/
 
 *.pth
+
+.history/

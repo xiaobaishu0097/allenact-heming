@@ -51,6 +51,8 @@ from allenact_plugins.robothor_plugin.robothor_tasks import ObjectNavTask
 class ResNetPreprocessGRUActorCriticMixin:
     sensors: Sequence[Sensor] = attr.ib()
     resnet_type: str = attr.ib()
+    rnn_type: str = attr.ib(default="GRU")
+    hidden_size: int = attr.ib(default=512)
     screen_size: int = attr.ib()
     goal_sensor_type: Type[Sensor] = attr.ib()
 
@@ -120,10 +122,11 @@ class ResNetPreprocessGRUActorCriticMixin:
             observation_space=kwargs["sensor_preprocessor_graph"].observation_spaces,
             goal_sensor_uuid=goal_sensor_uuid,
             rgb_resnet_preprocessor_uuid="rgb_resnet_imagenet" if has_rgb else None,
-            depth_resnet_preprocessor_uuid="depth_resnet_imagenet"
-            if has_depth
-            else None,
-            hidden_size=512,
+            depth_resnet_preprocessor_uuid=(
+                "depth_resnet_imagenet" if has_depth else None
+            ),
+            rnn_type=self.rnn_type,
+            hidden_size=self.hidden_size,
             goal_dims=32,
         )
 
@@ -154,9 +157,9 @@ class ObjectNavUnfrozenResNetWithGRUActorCriticMixin:
             rgb_uuid=rgb_uuid,
             depth_uuid=depth_uuid,
             goal_sensor_uuid=goal_sensor_uuid,
-            hidden_size=192
-            if self.multiple_beliefs and len(self.auxiliary_uuids) > 1
-            else 512,
+            hidden_size=(
+                192 if self.multiple_beliefs and len(self.auxiliary_uuids) > 1 else 512
+            ),
             backbone=self.backbone,
             resnet_baseplanes=32,
             object_type_embedding_dim=32,
@@ -384,11 +387,11 @@ class ObjectNavPPOMixin:
                     loss_weights=[val[1] for val in named_losses.values()],
                 )
             ],
-            lr_scheduler_builder=Builder(
-                LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)}
-            )
-            if anneal_lr
-            else None,
+            lr_scheduler_builder=(
+                Builder(LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)})
+                if anneal_lr
+                else None
+            ),
         )
 
 
@@ -446,11 +449,11 @@ class ObjectNavILMixin:
                     ),
                 )
             ],
-            lr_scheduler_builder=Builder(
-                LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)}
-            )
-            if anneal_lr
-            else None,
+            lr_scheduler_builder=(
+                Builder(LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)})
+                if anneal_lr
+                else None
+            ),
         )
 
 
@@ -511,9 +514,9 @@ class ObjectNavPPOHbSRMixin:
                     loss_weights=[val[1] for val in named_losses.values()],
                 )
             ],
-            lr_scheduler_builder=Builder(
-                LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)}
-            )
-            if anneal_lr
-            else None,
+            lr_scheduler_builder=(
+                Builder(LambdaLR, {"lr_lambda": LinearDecay(steps=ppo_steps)})
+                if anneal_lr
+                else None
+            ),
         )

@@ -1,5 +1,6 @@
 """Basic building block torch networks that can be used across a variety of
 tasks."""
+
 from typing import (
     Sequence,
     Dict,
@@ -12,11 +13,13 @@ from typing import (
     Any,
 )
 
+import einops
 import gym
 import numpy as np
 import torch
 from gym.spaces.dict import Dict as SpaceDict
 import torch.nn as nn
+from mamba_ssm import Mamba
 
 from allenact.algorithms.onpolicy_sync.policy import ActorCriticModel, DistributionType
 from allenact.base_abstractions.distributions import CategoricalDistr, Distr
@@ -274,9 +277,19 @@ class RNNStateEncoder(nn.Module):
         self._num_recurrent_layers = num_layers
         self._rnn_type = rnn_type
 
-        self.rnn = getattr(torch.nn, rnn_type)(
-            input_size=input_size, hidden_size=hidden_size, num_layers=num_layers
-        )
+        if hasattr(torch.nn, rnn_type):
+            self.rnn = getattr(torch.nn, rnn_type)(
+                input_size=input_size, hidden_size=hidden_size, num_layers=num_layers
+            )
+        elif rnn_type == "Mamba":
+            self.rnn_compresor = nn.Sequential(
+                nn.Linear(input_size, hidden_size),
+                nn.ReLU(),
+                nn.Linear(hidden_size, hidden_size),
+            )
+            self.rnn = Mamba(d_model=hidden_size, d_state=256)
+        else:
+            raise ValueError(f"Unknown RNN type {rnn_type}")
 
         self.trainable_masked_hidden_state = trainable_masked_hidden_state
         if trainable_masked_hidden_state:
@@ -393,12 +406,20 @@ class RNNStateEncoder(nn.Module):
 
         unpacked_hidden_states = self._unpack_hidden(hidden_states)
 
-        x, unpacked_hidden_states = self.rnn(
-            x,
-            self._mask_hidden(
-                unpacked_hidden_states, cast(torch.FloatTensor, masks[0].view(1, -1, 1))
-            ),
-        )
+        if self._rnn_type == "Mamba":
+            x = einops.rearrange(
+                self.rnn(self.rnn_compresor(einops.rearrange(x, "l b c -> b l c"))),
+                "b l c -> l b c",
+            )
+
+        else:
+            x, unpacked_hidden_states = self.rnn(
+                x,
+                self._mask_hidden(
+                    unpacked_hidden_states,
+                    cast(torch.FloatTensor, masks[0].view(1, -1, 1)),
+                ),
+            )
 
         return self.adapt_result(
             x,
@@ -475,7 +496,8 @@ class RNNStateEncoder(nn.Module):
         nsamplers: int,
         nagents: int,
     ) -> Tuple[
-        torch.FloatTensor, torch.FloatTensor,
+        torch.FloatTensor,
+        torch.FloatTensor,
     ]:
         output_dims = (nsteps, nsamplers) + ((nagents, -1) if obs_agent else (-1,))
         hidden_dims = (self.num_recurrent_layers, nsamplers) + (
@@ -483,7 +505,10 @@ class RNNStateEncoder(nn.Module):
         )
 
         outputs = cast(torch.FloatTensor, outputs.view(*output_dims))
-        hidden_states = cast(torch.FloatTensor, hidden_states.view(*hidden_dims),)
+        hidden_states = cast(
+            torch.FloatTensor,
+            hidden_states.view(*hidden_dims),
+        )
 
         return outputs, hidden_states
 
@@ -538,14 +563,25 @@ class RNNStateEncoder(nn.Module):
             start_idx = int(has_zeros[i])
             end_idx = int(has_zeros[i + 1])
 
-            # noinspection PyTypeChecker
-            rnn_scores, unpacked_hidden_states = self.rnn(
-                x[start_idx:end_idx],
-                self._mask_hidden(
-                    unpacked_hidden_states,
-                    cast(torch.FloatTensor, masks[start_idx].view(1, -1, 1)),
-                ),
-            )
+            if self._rnn_type == "Mamba":
+                rnn_scores = einops.rearrange(
+                    self.rnn(
+                        self.rnn_compresor(
+                            einops.rearrange(x[start_idx:end_idx], "l b c -> b l c")
+                        )
+                    ),
+                    "l b c -> b l c",
+                )
+            else:
+
+                # noinspection PyTypeChecker
+                rnn_scores, unpacked_hidden_states = self.rnn(
+                    x[start_idx:end_idx],
+                    self._mask_hidden(
+                        unpacked_hidden_states,
+                        cast(torch.FloatTensor, masks[start_idx].view(1, -1, 1)),
+                    ),
+                )
 
             outputs.append(rnn_scores)
 

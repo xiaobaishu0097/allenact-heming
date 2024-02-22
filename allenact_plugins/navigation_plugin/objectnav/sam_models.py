@@ -4,6 +4,7 @@ import einops
 import gym
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from gym.spaces import Dict as SpaceDict
 
 from allenact.algorithms.onpolicy_sync.policy import ObservationType
@@ -105,14 +106,16 @@ class SAMResnetTensorGoalEncoder(nn.Module):
                 nn.Linear(256, 128), nn.ReLU(), nn.Linear(128, 128)
             )
 
-            decoder_layer = nn.TransformerDecoderLayer(d_model=128, nhead=4)
+            decoder_layer = nn.TransformerDecoderLayer(
+                d_model=128, dim_feedforward=256, nhead=4
+            )
             self.transformer = nn.TransformerDecoder(
-                decoder_layer=decoder_layer, num_layers=2
+                decoder_layer=decoder_layer, num_layers=1
             )
 
             self.state_query = nn.Embedding(1, 128)
 
-            self.global_pos_embedding = get_2d_positional_embedding(7, 64)
+            self.global_pos_embedding = get_2d_positional_embedding(2, 64)
 
             self.resnet_embedding = nn.Embedding(1, 128)
             self.sam_segmentation_embedding = nn.Embedding(1, 128)
@@ -201,7 +204,8 @@ class SAMResnetTensorGoalEncoder(nn.Module):
             return self.embed_goal(observations[self.goal_uuid])
         resnet_features = self.compress_resnet(observations)
         resnet_features = einops.rearrange(
-            resnet_features + self.global_pos_embedding.to(resnet_features.device),
+            F.max_pool2d(resnet_features, (3, 3))
+            + self.global_pos_embedding.to(resnet_features.device),
             "b c h w -> b (h w) c",
         )  # (batch_size, 7*7, 128)
         resnet_features = self.resnet_embedding.weight + resnet_features

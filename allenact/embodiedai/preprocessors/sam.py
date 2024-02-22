@@ -8,8 +8,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-from torchvision import transforms
 import matplotlib.pyplot as plt
 
 from allenact.base_abstractions.preprocessor import Preprocessor
@@ -86,6 +84,8 @@ class SAMEmbedder(nn.Module):
         ):
             self.eval()
 
+        self.num_queries = self.config["model"]["num_queries"]
+
         self.mask_generator = SamAutomaticMaskGenerator(
             self.model,
             points_per_side=self.config["model"]["points_per_side"],
@@ -99,12 +99,12 @@ class SAMEmbedder(nn.Module):
         segmentation_bboxs: list = []
         segmentation_stability_scores: list = []
 
-        if len(segmentation_outputs) > 100:
+        if len(segmentation_outputs) > self.num_queries:
             segmentation_outputs = sorted(
                 segmentation_outputs,
                 key=lambda x: x["stability_score"],
                 reverse=True,
-            )[:100]
+            )[: self.num_queries]
 
         for seg in segmentation_outputs:
             segmentation_masks.append(
@@ -130,31 +130,31 @@ class SAMEmbedder(nn.Module):
             return {
                 "segmentation_masks": F.pad(
                     torch.tensor(np.zeros((1, 224, 224))),
-                    (0, 0, 0, 0, 0, 100 - 1),
+                    (0, 0, 0, 0, 0, self.num_queries - 1),
                     "constant",
                     0,
                 ),
                 "segmentation_features": F.pad(
                     torch.tensor(np.zeros((1, 256))),
-                    (0, 0, 0, 100 - 1),
+                    (0, 0, 0, self.num_queries - 1),
                     "constant",
                     0,
                 ),
                 "segmentation_areas": F.pad(
                     torch.tensor([0]),
-                    (0, 100 - 1),
+                    (0, self.num_queries - 1),
                     "constant",
                     0,
                 ),
                 "segmentation_bboxs": F.pad(
                     torch.tensor(np.zeros((1, 4))),
-                    (0, 0, 0, 100 - 1),
+                    (0, 0, 0, self.num_queries - 1),
                     "constant",
                     0,
                 ),
                 "segmentation_stability_scores": F.pad(
                     torch.tensor([0]),
-                    (0, 100 - 1),
+                    (0, self.num_queries - 1),
                     "constant",
                     0,
                 ),
@@ -163,31 +163,31 @@ class SAMEmbedder(nn.Module):
         segmentation_results = {
             "segmentation_masks": F.pad(
                 torch.tensor(np.concatenate(segmentation_masks, axis=0)),
-                (0, 0, 0, 0, 0, 100 - len(segmentation_masks)),
+                (0, 0, 0, 0, 0, self.num_queries - len(segmentation_masks)),
                 "constant",
                 0,
             ),
             "segmentation_features": F.pad(
                 torch.cat(segmentation_features, dim=0),
-                (0, 0, 0, 100 - len(segmentation_features)),
+                (0, 0, 0, self.num_queries - len(segmentation_features)),
                 "constant",
                 0,
             ),
             "segmentation_areas": F.pad(
                 torch.tensor(segmentation_areas),
-                (0, 100 - len(segmentation_areas)),
+                (0, self.num_queries - len(segmentation_areas)),
                 "constant",
                 0,
             ),
             "segmentation_bboxs": F.pad(
                 torch.tensor(np.concatenate(segmentation_bboxs, axis=0)),
-                (0, 0, 0, 100 - len(segmentation_bboxs)),
+                (0, 0, 0, self.num_queries - len(segmentation_bboxs)),
                 "constant",
                 0,
             ),
             "segmentation_stability_scores": F.pad(
                 torch.tensor(segmentation_stability_scores),
-                (0, 100 - len(segmentation_stability_scores)),
+                (0, self.num_queries - len(segmentation_stability_scores)),
                 "constant",
                 0,
             ),
@@ -209,9 +209,11 @@ class SAMEmbedder(nn.Module):
         # FIXME: check the input format and type convertion
         segmentation_outputs = []
         for i_batch in range(x["rgb_uint8"].shape[0]):
-            output = self.mask_generator.predict_and_extract(
-                x["rgb_uint8"][i_batch, ...].cpu().numpy()
-            )
+            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                with torch.no_grad():
+                    output = self.mask_generator.predict_and_extract(
+                        x["rgb_uint8"][i_batch, ...].cpu().numpy()
+                    )
 
             segmentation_outputs.append(self.embed_segmentation_results(output))
 

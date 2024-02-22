@@ -5,8 +5,9 @@ checkpoint:
   path: "./storage/model_zoo/sam/sam_vit_b_01ec64.pth"
 
 model:
-  points_per_side: 16
-  points_per_batch: 32
+  num_queries: 64
+  points_per_side: 8
+  points_per_batch: 64
 
 fine_tune:
   image_encoder: False

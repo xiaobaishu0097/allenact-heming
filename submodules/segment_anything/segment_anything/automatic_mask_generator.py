@@ -485,12 +485,17 @@ class SamAutomaticMaskGenerator:
         in_labels = torch.ones(
             in_points.shape[0], dtype=torch.int, device=in_points.device
         )
-        masks, iou_preds, _, mask_features = self.predictor.predict_and_extract_torch(
-            in_points[:, None, :],
-            in_labels[:, None],
-            multimask_output=True,
-            return_logits=True,
-        )
+
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
+            with torch.no_grad():
+                masks, iou_preds, _, mask_features = (
+                    self.predictor.predict_and_extract_torch(
+                        in_points[:, None, :],
+                        in_labels[:, None],
+                        multimask_output=True,
+                        return_logits=True,
+                    )
+                )
 
         # Serialize predictions and store in MaskData
         data = MaskData(

@@ -152,7 +152,7 @@ class SAMResnetTensorGoalEncoder(nn.Module):
 
         segmentation_features = (
             self.sam_segmentation_embedding.weight
-            + self.sam_compressor(sam_feature["segmentation_features"])
+            + self.sam_compressor(sam_feature["segmentation_features"].float())
         )
 
         target_features = self.target_embedding.weight + self.sam_compressor(

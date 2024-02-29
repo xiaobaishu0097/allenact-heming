@@ -49,7 +49,7 @@ class ObjectNaviThorRGBPPOExperimentConfig(ObjectNaviThorBaseConfig):
             screen_size=self.SCREEN_SIZE,
             goal_sensor_type=GoalObjectTypeThorSensor,
             efficient_sam_config=(
-                "./configs/segment_anything/frozen.yaml"
+                "./configs/efficient_sam/efficientsam_ti.yaml"
                 if "efficient_sam_config" not in kwargs
                 else kwargs["efficient_sam_config"]
             ),

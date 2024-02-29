@@ -95,15 +95,17 @@ class EfficientSAMEmbedder(nn.Module):
                 xy.append([curr_x, curr_y])
         xy = torch.from_numpy(np.array(xy))
 
-        self.points = torch.from_numpy(np.array(xy)).cuda()
+        self.points = torch.from_numpy(np.array(xy))
         self.num_pts = xy.shape[0]
-        self.point_labels = torch.ones(self.num_pts, 1).cuda()
+        self.point_labels = torch.ones(self.num_pts, 1)
 
         self.num_queries = self.config["model"]["num_queries"]
 
-        self.mask_feature_pooling = nn.MaxPool2d((64, 64))
-
     def get_predictions_given_embeddings_and_queries(self, img):
+        if img.device != self.points.device:
+            self.points = self.points.to(img.device)
+            self.point_labels = self.point_labels.to(img.device)
+
         predicted_masks, predicted_iou, extracted_features = self.model.extract_masks(
             img.float() / 255,
             einops.repeat(self.points, "n c -> b n 1 c", b=img.shape[0]),
@@ -137,7 +139,7 @@ class EfficientSAMEmbedder(nn.Module):
             sample_iou_ = sample_iou_[sample_index]
             sample_features = sample_features[sample_index]
             sample_features = einops.rearrange(
-                self.mask_feature_pooling(sample_features), "n c 1 1 -> n c"
+                F.max_pool2d(sample_features, (64, 64)), "n c 1 1 -> n c"
             )
 
             if sample_masks.shape[0] >= self.num_queries:

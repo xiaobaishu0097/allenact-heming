@@ -250,15 +250,15 @@ class EfficientSam(nn.Module):
             F.max_pool2d(
                 einops.rearrange(
                     mask_features,
-                    "(b q) (h w) c -> b q c h w",
-                    b=batch_size,
-                    q=max_num_queries,
+                    "b (h w) c -> b c h w",
                     h=64,
                     w=64,
                 ),
                 (64, 64),
             ),
-            "b q c 1 1 -> b q c",
+            "(b q) c 1 1 -> b q c",
+            b=batch_size,
+            q=max_num_queries,
         )
         return output_masks, iou_predictions, mask_features
 

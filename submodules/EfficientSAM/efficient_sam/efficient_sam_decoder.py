@@ -290,6 +290,7 @@ class MaskDecoder(nn.Module):
         else:
             return masks[:, :1, :], iou_pred[:, :1]
 
+    @torch.no_grad()
     def extract_masks(
         self,
         image_embeddings: torch.Tensor,
@@ -385,6 +386,7 @@ class MaskDecoder(nn.Module):
         iou_pred = self.iou_prediction_head(iou_token_out)
         return masks, iou_pred
 
+    @torch.no_grad()
     def predict_and_extract_masks(
         self,
         image_embeddings: torch.Tensor,

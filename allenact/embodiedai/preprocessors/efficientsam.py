@@ -102,6 +102,7 @@ class EfficientSAMEmbedder(nn.Module):
 
         self.num_queries = self.config["model"]["num_queries"]
 
+    @torch.no_grad()
     def get_predictions_given_embeddings_and_queries(self, img):
         if img.device != self.points.device:
             self.points = self.points.to(img.device)

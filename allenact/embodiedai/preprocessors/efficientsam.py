@@ -80,7 +80,8 @@ class EfficientSAMEmbedder(nn.Module):
 
         for param in self.model.image_encoder.parameters():
             param.requires_grad = False
-
+        for param in self.model.prompt_encoder.parameters():
+            param.requires_grad = False
         for param in self.model.mask_decoder.parameters():
             param.requires_grad = False
 

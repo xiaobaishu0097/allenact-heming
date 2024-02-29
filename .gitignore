@@ -206,3 +206,6 @@ storage/
 *.pth
 
 .history/
+
+!submodules/EfficientSAM/torchscripted_model/efficient_sam_vitt_torchscript.pt
+!submodules/EfficientSAM/weights/*

@@ -1,0 +1,5 @@
+model:
+  type: efficient_sam_vitt
+
+  grid_size: 8
+  num_queries: 64

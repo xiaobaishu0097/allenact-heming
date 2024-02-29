@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from torchvision.transforms import ToTensor
 
 from allenact.base_abstractions.preprocessor import Preprocessor
 from allenact.utils.misc_utils import prepare_locals_for_super
@@ -78,12 +79,14 @@ class EfficientSAMEmbedder(nn.Module):
                 f"Model type {self.config['model']['type']} not implemented"
             )
 
-        for param in self.model.image_encoder.parameters():
+        for param in self.model.parameters():
             param.requires_grad = False
-        for param in self.model.prompt_encoder.parameters():
-            param.requires_grad = False
-        for param in self.model.mask_decoder.parameters():
-            param.requires_grad = False
+        # for param in self.model.image_encoder.parameters():
+        #     param.requires_grad = False
+        # for param in self.model.prompt_encoder.parameters():
+        #     param.requires_grad = False
+        # for param in self.model.mask_decoder.parameters():
+        #     param.requires_grad = False
 
         self.eval()
 
@@ -113,7 +116,6 @@ class EfficientSAMEmbedder(nn.Module):
             einops.repeat(self.points, "n c -> b n 1 c", b=img.shape[0]),
             einops.repeat(self.point_labels, "n c -> b n c", b=img.shape[0]),
         )
-        extracted_features = extracted_features.detach()
         sorted_ids = torch.argsort(predicted_iou, dim=-1, descending=True)
         predicted_iou_scores = torch.take_along_dim(predicted_iou, sorted_ids, dim=2)
         predicted_masks = torch.take_along_dim(
@@ -176,7 +178,7 @@ class EfficientSAMEmbedder(nn.Module):
 
         masks = torch.stack(batch_masks, dim=0)
         iou_ = torch.stack(batch_iou_, dim=0)
-        extracted_features = torch.stack(batch_features, dim=0)
+        extracted_features = torch.stack(batch_features, dim=0).detach()
 
         masks = torch.ge(masks, 0.0)
         return masks, iou_, extracted_features

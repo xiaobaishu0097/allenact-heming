@@ -152,6 +152,7 @@ class EfficientSam(nn.Module):
         return output_masks, iou_predictions
 
     @torch.jit.export
+    @torch.no_grad()
     def predict_and_extract_masks(
         self,
         image_embeddings: torch.Tensor,
@@ -246,12 +247,18 @@ class EfficientSam(nn.Module):
             iou_predictions, (batch_size, max_num_queries, num_predictions)
         )
         mask_features = einops.rearrange(
-            mask_features,
-            "(b q) (h w) c -> b q c h w",
-            b=batch_size,
-            q=max_num_queries,
-            h=64,
-            w=64,
+            F.max_pool2d(
+                einops.rearrange(
+                    mask_features,
+                    "(b q) (h w) c -> b q c h w",
+                    b=batch_size,
+                    q=max_num_queries,
+                    h=64,
+                    w=64,
+                ),
+                (64, 64),
+            ),
+            "b q c 1 1 -> b q c",
         )
         return output_masks, iou_predictions, mask_features
 

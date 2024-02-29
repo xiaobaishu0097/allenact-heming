@@ -138,9 +138,9 @@ class EfficientSAMEmbedder(nn.Module):
             sample_masks = sample_masks[sample_index]
             sample_iou_ = sample_iou_[sample_index]
             sample_features = sample_features[sample_index]
-            sample_features = einops.rearrange(
-                F.max_pool2d(sample_features, (64, 64)), "n c 1 1 -> n c"
-            )
+            # sample_features = einops.rearrange(
+            #     F.max_pool2d(sample_features, (64, 64)), "n c 1 1 -> n c"
+            # )
 
             if sample_masks.shape[0] >= self.num_queries:
                 sorted_indices = torch.argsort(sample_score_, descending=True)

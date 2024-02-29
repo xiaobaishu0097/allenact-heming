@@ -113,6 +113,7 @@ class EfficientSAMEmbedder(nn.Module):
             einops.repeat(self.points, "n c -> b n 1 c", b=img.shape[0]),
             einops.repeat(self.point_labels, "n c -> b n c", b=img.shape[0]),
         )
+        extracted_features = extracted_features.detach()
         sorted_ids = torch.argsort(predicted_iou, dim=-1, descending=True)
         predicted_iou_scores = torch.take_along_dim(predicted_iou, sorted_ids, dim=2)
         predicted_masks = torch.take_along_dim(

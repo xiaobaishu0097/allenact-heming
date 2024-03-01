@@ -176,6 +176,7 @@ class EfficientSAMEmbedder(nn.Module):
             batch_iou_.append(sample_iou_)
             batch_features.append(sample_features)
 
+        # torch.cuda.empty_cache()
         masks = torch.stack(batch_masks, dim=0)
         iou_ = torch.stack(batch_iou_, dim=0)
         extracted_features = torch.stack(batch_features, dim=0).detach()
@@ -193,7 +194,7 @@ class EfficientSAMEmbedder(nn.Module):
         )
 
         segmentation_outputs = {
-            "segmentation_masks": predicted_masks,
+            # "segmentation_masks": predicted_masks,
             "segmentation_iou": predicted_iou,
             "segmentation_features": extracted_features,
         }

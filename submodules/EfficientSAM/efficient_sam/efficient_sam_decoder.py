@@ -7,6 +7,7 @@
 from typing import List, Tuple, Type
 
 import numpy as np
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -327,7 +328,10 @@ class MaskDecoder(nn.Module):
             image_embed_dim_w,
         ) = image_embeddings.shape
 
-        # Tile the image embedding for all queries.
+        batch_masks = []
+        batch_iou_pred = []
+        batch_mask_features = []
+
         image_embeddings_tiled = torch.tile(
             image_embeddings[:, None, :, :, :], [1, max_num_queries, 1, 1, 1]
         ).view(
@@ -339,15 +343,35 @@ class MaskDecoder(nn.Module):
         sparse_prompt_embeddings = sparse_prompt_embeddings.reshape(
             batch_size * max_num_queries, sparse_embed_dim_1, sparse_embed_dim_2
         )
-        masks, iou_pred, mask_features = self.predict_and_extract_masks(
-            image_embeddings=image_embeddings_tiled,
-            image_pe=image_pe,
-            sparse_prompt_embeddings=sparse_prompt_embeddings,
-        )
+
+        n_samples = 256
+        for i in range(math.ceil(image_embeddings_tiled.shape[0] / n_samples)):
+            sample_image_embeddings = image_embeddings_tiled[
+                i * n_samples : (i + 1) * n_samples, ...
+            ]
+            sample_sparse_prompt_embeddings = sparse_prompt_embeddings[
+                i * n_samples : (i + 1) * n_samples, ...
+            ]
+
+            masks, iou_pred, mask_features = self.predict_and_extract_masks(
+                image_embeddings=sample_image_embeddings,
+                image_pe=image_pe,
+                sparse_prompt_embeddings=sample_sparse_prompt_embeddings,
+            )
+
+            batch_masks.append(masks)
+            batch_iou_pred.append(iou_pred)
+            batch_mask_features.append(mask_features)
+
+        # torch.cuda.empty_cache()
+        batch_masks = torch.cat(batch_masks, dim=0)
+        batch_iou_pred = torch.cat(batch_iou_pred, dim=0)
+        batch_mask_features = torch.cat(batch_mask_features, dim=0)
+
         if multimask_output and self.num_multimask_outputs > 1:
-            return masks[:, 1:, :], iou_pred[:, 1:], mask_features
+            return batch_masks[:, 1:, :], batch_iou_pred[:, 1:], batch_mask_features
         else:
-            return masks[:, :1, :], iou_pred[:, :1], mask_features
+            return batch_masks[:, :1, :], batch_iou_pred[:, :1], batch_mask_features
 
     def predict_masks(
         self,
